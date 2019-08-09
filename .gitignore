@@ -42,3 +42,4 @@
 *.xcodeproj
 *~
 
+pdfium/*
