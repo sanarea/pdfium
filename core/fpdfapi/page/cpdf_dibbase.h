@@ -4,18 +4,15 @@
 
 // Original code copyright 2014 Foxit Software Inc. http://www.foxitsoftware.com
 
-#ifndef CORE_FPDFAPI_RENDER_CPDF_DIBBASE_H_
-#define CORE_FPDFAPI_RENDER_CPDF_DIBBASE_H_
+#ifndef CORE_FPDFAPI_PAGE_CPDF_DIBBASE_H_
+#define CORE_FPDFAPI_PAGE_CPDF_DIBBASE_H_
 
 #include <memory>
 #include <vector>
 
 #include "core/fpdfapi/page/cpdf_clippath.h"
 #include "core/fpdfapi/page/cpdf_colorspace.h"
-#include "core/fpdfapi/page/cpdf_countedobject.h"
 #include "core/fpdfapi/page/cpdf_graphicstates.h"
-#include "core/fpdfapi/render/cpdf_imageloader.h"
-#include "core/fpdfapi/render/cpdf_rendercontext.h"
 #include "core/fxcrt/retain_ptr.h"
 #include "core/fxcrt/unowned_ptr.h"
 #include "core/fxge/dib/cfx_dibbase.h"
@@ -37,7 +34,7 @@ struct DIB_COMP_DATA {
 namespace fxcodec {
 class Jbig2Context;
 class ScanlineDecoder;
-}
+}  // namespace fxcodec
 
 #define FPDF_HUGE_IMAGE_SIZE 60000000
 
@@ -129,8 +126,8 @@ class CPDF_DIBBase final : public CFX_DIBBase {
   bool TransMask() const;
 
   UnownedPtr<CPDF_Document> m_pDocument;
-  UnownedPtr<const CPDF_Stream> m_pStream;
-  UnownedPtr<const CPDF_Dictionary> m_pDict;
+  RetainPtr<const CPDF_Stream> m_pStream;
+  RetainPtr<const CPDF_Dictionary> m_pDict;
   RetainPtr<CPDF_StreamAcc> m_pStreamAcc;
   RetainPtr<CPDF_ColorSpace> m_pColorSpace;
   uint32_t m_Family = 0;
@@ -157,8 +154,8 @@ class CPDF_DIBBase final : public CFX_DIBBase {
   // Must come after |m_pCachedBitmap|.
   std::unique_ptr<fxcodec::Jbig2Context> m_pJbig2Context;
 
-  UnownedPtr<const CPDF_Stream> m_pMaskStream;
+  RetainPtr<const CPDF_Stream> m_pMaskStream;
   LoadState m_Status = LoadState::kFail;
 };
 
-#endif  // CORE_FPDFAPI_RENDER_CPDF_DIBBASE_H_
+#endif  // CORE_FPDFAPI_PAGE_CPDF_DIBBASE_H_

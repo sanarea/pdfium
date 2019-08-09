@@ -557,7 +557,7 @@ RetainPtr<CPDF_ColorSpace> CPDF_ColorSpace::Load(
     default:
       return nullptr;
   }
-  pCS->m_pArray = pArray;
+  pCS->m_pArray.Reset(pArray);
   pCS->m_nComponents = pCS->v_Load(pDoc, pArray, pVisited);
   if (pCS->m_nComponents == 0)
     return nullptr;
@@ -902,15 +902,7 @@ void CPDF_LabCS::TranslateImageLine(uint8_t* pDestBuf,
 CPDF_ICCBasedCS::CPDF_ICCBasedCS(CPDF_Document* pDoc)
     : CPDF_ColorSpace(pDoc, PDFCS_ICCBASED) {}
 
-CPDF_ICCBasedCS::~CPDF_ICCBasedCS() {
-  if (m_pProfile && m_pDocument) {
-    const CPDF_Stream* pStream = m_pProfile->GetStream();
-    m_pProfile.Reset();  // Give up our reference first.
-    auto* pPageData = CPDF_DocPageData::FromDocument(m_pDocument.Get());
-    if (pPageData)
-      pPageData->MaybePurgeIccProfile(pStream);
-  }
-}
+CPDF_ICCBasedCS::~CPDF_ICCBasedCS() = default;
 
 uint32_t CPDF_ICCBasedCS::v_Load(CPDF_Document* pDoc,
                                  const CPDF_Array* pArray,
@@ -1138,7 +1130,7 @@ uint32_t CPDF_IndexedCS::v_Load(CPDF_Document* pDoc,
     return 0;
 
   const CPDF_Object* pBaseObj = pArray->GetDirectObjectAt(1);
-  if (pBaseObj == m_pArray)
+  if (pBaseObj == m_pArray.Get())
     return 0;
 
   auto* pDocPageData = CPDF_DocPageData::FromDocument(pDoc);
@@ -1237,7 +1229,7 @@ uint32_t CPDF_SeparationCS::v_Load(CPDF_Document* pDoc,
 
   m_Type = Colorant;
   const CPDF_Object* pAltCS = pArray->GetDirectObjectAt(2);
-  if (pAltCS == m_pArray)
+  if (pAltCS == m_pArray.Get())
     return 0;
 
   m_pAltCS = Load(pDoc, pAltCS, pVisited);
@@ -1317,7 +1309,7 @@ uint32_t CPDF_DeviceNCS::v_Load(CPDF_Document* pDoc,
     return 0;
 
   const CPDF_Object* pAltCS = pArray->GetDirectObjectAt(2);
-  if (!pAltCS || pAltCS == m_pArray)
+  if (!pAltCS || pAltCS == m_pArray.Get())
     return 0;
 
   m_pAltCS = Load(pDoc, pAltCS, pVisited);

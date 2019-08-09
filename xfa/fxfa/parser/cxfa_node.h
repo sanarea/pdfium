@@ -173,8 +173,8 @@ class CXFA_Node : public CXFA_Object, public TreeNode<CXFA_Node> {
   CXFA_Node* GetFirstContainerChild() const;
   CXFA_Node* GetContainerParent() const;
 
-  std::vector<CXFA_Node*> GetNodeList(uint32_t dwTypeFilter,
-                                      XFA_Element eTypeFilter);
+  std::vector<CXFA_Node*> GetNodeListForType(XFA_Element eTypeFilter);
+  std::vector<CXFA_Node*> GetNodeListWithFilter(uint32_t dwTypeFilter);
   CXFA_Node* CreateSamePacketNode(XFA_Element eType);
   CXFA_Node* CloneTemplateToForm(bool bRecursive);
   CXFA_Node* GetTemplateNodeIfExists() const;
@@ -182,7 +182,8 @@ class CXFA_Node : public CXFA_Object, public TreeNode<CXFA_Node> {
   CXFA_Node* GetDataDescriptionNode();
   void SetDataDescriptionNode(CXFA_Node* pDataDescriptionNode);
   CXFA_Node* GetBindData();
-  std::vector<CXFA_Node*>* GetBindItems() { return &binding_nodes_; }
+  bool HasBindItems() const { return !binding_nodes_.empty(); }
+  std::vector<CXFA_Node*> GetBindItemsCopy() { return binding_nodes_; }
   int32_t AddBindItem(CXFA_Node* pFormNode);
   int32_t RemoveBindItem(CXFA_Node* pFormNode);
   bool HasBindItem() const;

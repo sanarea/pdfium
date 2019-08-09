@@ -12,6 +12,8 @@
 
 #include "core/fpdfapi/font/cpdf_type3char.h"
 #include "core/fpdfapi/font/cpdf_type3font.h"
+#include "core/fpdfapi/page/cpdf_docpagedata.h"
+#include "core/fpdfapi/render/cpdf_docrenderdata.h"
 #include "core/fpdfapi/render/cpdf_type3glyphmap.h"
 #include "core/fxcrt/fx_coordinates.h"
 #include "core/fxcrt/fx_safe_types.h"
@@ -85,7 +87,7 @@ int DetectFirstLastScan(const RetainPtr<CFX_DIBitmap>& pBitmap, bool bFirst) {
 
 CPDF_Type3Cache::CPDF_Type3Cache(CPDF_Type3Font* pFont) : m_pFont(pFont) {}
 
-CPDF_Type3Cache::~CPDF_Type3Cache() {}
+CPDF_Type3Cache::~CPDF_Type3Cache() = default;
 
 const CFX_GlyphBitmap* CPDF_Type3Cache::LoadGlyph(uint32_t charcode,
                                                   const CFX_Matrix* pMatrix) {

@@ -9,8 +9,9 @@
 
 #include <memory>
 #include <set>
+#include <utility>
 
-#include "core/fpdfapi/font/cpdf_type3char.h"
+#include "core/fpdfapi/font/cpdf_font.h"
 #include "core/fpdfapi/page/cpdf_pageobjectholder.h"
 
 class CFX_Matrix;
@@ -22,7 +23,7 @@ class CPDF_Stream;
 class CPDF_Type3Char;
 
 class CPDF_Form final : public CPDF_PageObjectHolder,
-                        public CPDF_Type3Char::FormIface {
+                        public CPDF_Font::FormIface {
  public:
   // Helper method to choose the first non-null resources dictionary.
   static CPDF_Dictionary* ChooseResourcesDict(CPDF_Dictionary* pResources,
@@ -38,10 +39,12 @@ class CPDF_Form final : public CPDF_PageObjectHolder,
             CPDF_Dictionary* pParentResources);
   ~CPDF_Form() override;
 
-  // CPDF_Type3Char::FormIface:
+  // CPDF_Font::FormIface:
   void ParseContentForType3Char(CPDF_Type3Char* pType3Char) override;
-  const CPDF_ImageObject* GetSoleImageOfForm() const override;
+  bool HasPageObjects() const override;
   CFX_FloatRect CalcBoundingBox() const override;
+  Optional<std::pair<RetainPtr<CFX_DIBitmap>, CFX_Matrix>>
+  GetBitmapAndMatrixFromSoleImageOfForm() const override;
 
   void ParseContent();
   void ParseContent(const CPDF_AllStates* pGraphicStates,

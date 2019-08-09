@@ -6,7 +6,6 @@
 
 #include "public/fpdf_ext.h"
 
-#include "core/fpdfapi/cpdf_modulemgr.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_document.h"
 #include "core/fpdfdoc/cpdf_interactiveform.h"
@@ -74,8 +73,7 @@ FSDK_SetUnSpObjProcessHandler(UNSUPPORT_INFO* unsp_info) {
   if (!unsp_info || unsp_info->version != 1)
     return false;
 
-  CPDF_ModuleMgr::Get()->SetUnsupportInfoAdapter(
-      pdfium::MakeUnique<fpdfapi::UnsupportedInfoAdapter>(unsp_info));
+  SetPDFUnsupportInfo(unsp_info);
   return true;
 }
 

@@ -31,7 +31,7 @@ double Mod(double x, double y) {
 }
 
 double GetLocalTZA() {
-  if (!FSDK_IsSandBoxPolicyEnabled(FPDF_POLICY_MACHINETIME_ACCESS))
+  if (!IsPDFSandboxPolicyEnabled(FPDF_POLICY_MACHINETIME_ACCESS))
     return 0;
   time_t t = 0;
   FXSYS_time(&t);
@@ -46,7 +46,7 @@ double GetLocalTZA() {
 }
 
 int GetDaylightSavingTA(double d) {
-  if (!FSDK_IsSandBoxPolicyEnabled(FPDF_POLICY_MACHINETIME_ACCESS))
+  if (!IsPDFSandboxPolicyEnabled(FPDF_POLICY_MACHINETIME_ACCESS))
     return 0;
   time_t t = (time_t)(d / 1000);
   struct tm* tmp = FXSYS_localtime(&t);
@@ -166,7 +166,7 @@ int DateFromTime(double t) {
 }
 
 size_t FindSubWordLength(const WideString& str, size_t nStart) {
-  pdfium::span<const wchar_t> data = str.AsSpan();
+  pdfium::span<const wchar_t> data = str.span();
   size_t i = nStart;
   while (i < data.size() && std::iswalnum(data[i]))
     ++i;
@@ -188,7 +188,7 @@ static constexpr size_t KMonthAbbreviationLength = 3;  // Anything in |kMonths|.
 static constexpr size_t kLongestFullMonthLength = 9;   // September
 
 double FX_GetDateTime() {
-  if (!FSDK_IsSandBoxPolicyEnabled(FPDF_POLICY_MACHINETIME_ACCESS))
+  if (!IsPDFSandboxPolicyEnabled(FPDF_POLICY_MACHINETIME_ACCESS))
     return 0;
 
   time_t t = FXSYS_time(nullptr);

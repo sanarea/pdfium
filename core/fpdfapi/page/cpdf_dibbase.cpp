@@ -4,7 +4,7 @@
 
 // Original code copyright 2014 Foxit Software Inc. http://www.foxitsoftware.com
 
-#include "core/fpdfapi/render/cpdf_dibbase.h"
+#include "core/fpdfapi/page/cpdf_dibbase.h"
 
 #include <algorithm>
 #include <memory>
@@ -21,8 +21,6 @@
 #include "core/fpdfapi/parser/cpdf_stream_acc.h"
 #include "core/fpdfapi/parser/fpdf_parser_decode.h"
 #include "core/fpdfapi/parser/fpdf_parser_utility.h"
-#include "core/fpdfapi/render/cpdf_pagerendercache.h"
-#include "core/fpdfapi/render/cpdf_renderstatus.h"
 #include "core/fxcodec/basic/basicmodule.h"
 #include "core/fxcodec/fx_codec.h"
 #include "core/fxcodec/jbig2/jbig2module.h"
@@ -104,11 +102,11 @@ bool CPDF_DIBBase::Load(CPDF_Document* pDoc, const CPDF_Stream* pStream) {
     return false;
 
   m_pDocument = pDoc;
-  m_pDict = pStream->GetDict();
+  m_pDict.Reset(pStream->GetDict());
   if (!m_pDict)
     return false;
 
-  m_pStream = pStream;
+  m_pStream.Reset(pStream);
   m_Width = m_pDict->GetIntegerFor("Width");
   m_Height = m_pDict->GetIntegerFor("Height");
   if (m_Width <= 0 || m_Height <= 0 || m_Width > kMaxImageDimension ||
@@ -217,8 +215,8 @@ CPDF_DIBBase::LoadState CPDF_DIBBase::StartLoadDIBBase(
     return LoadState::kFail;
 
   m_pDocument = pDoc;
-  m_pDict = pStream->GetDict();
-  m_pStream = pStream;
+  m_pDict.Reset(pStream->GetDict());
+  m_pStream.Reset(pStream);
   m_bStdCS = bStdCS;
   m_bHasMask = bHasMask;
   m_Width = m_pDict->GetIntegerFor("Width");
@@ -665,9 +663,9 @@ RetainPtr<CFX_DIBitmap> CPDF_DIBBase::LoadJpxBitmap() {
 
 CPDF_DIBBase::LoadState CPDF_DIBBase::StartLoadMask() {
   m_MatteColor = 0XFFFFFFFF;
-  m_pMaskStream = m_pDict->GetStreamFor("SMask");
+  m_pMaskStream.Reset(m_pDict->GetStreamFor("SMask"));
   if (!m_pMaskStream) {
-    m_pMaskStream = ToStream(m_pDict->GetDirectObjectFor("Mask"));
+    m_pMaskStream.Reset(ToStream(m_pDict->GetDirectObjectFor("Mask")));
     return m_pMaskStream ? StartLoadMaskDIB() : LoadState::kSuccess;
   }
 

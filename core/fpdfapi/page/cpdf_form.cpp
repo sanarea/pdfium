@@ -14,6 +14,7 @@
 #include "core/fpdfapi/page/cpdf_pageobjectholder.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_stream.h"
+#include "core/fxge/dib/cfx_dibitmap.h"
 #include "third_party/base/ptr_util.h"
 
 // static
@@ -83,6 +84,10 @@ void CPDF_Form::ParseContentInternal(const CPDF_AllStates* pGraphicStates,
   ContinueParse(nullptr);
 }
 
+bool CPDF_Form::HasPageObjects() const {
+  return GetPageObjectCount() != 0;
+}
+
 CFX_FloatRect CPDF_Form::CalcBoundingBox() const {
   if (GetPageObjectCount() == 0)
     return CFX_FloatRect();
@@ -105,6 +110,14 @@ const CPDF_Stream* CPDF_Form::GetStream() const {
   return m_pFormStream.Get();
 }
 
-const CPDF_ImageObject* CPDF_Form::GetSoleImageOfForm() const {
-  return GetPageObjectCount() == 1 ? (*begin())->AsImage() : nullptr;
+Optional<std::pair<RetainPtr<CFX_DIBitmap>, CFX_Matrix>>
+CPDF_Form::GetBitmapAndMatrixFromSoleImageOfForm() const {
+  if (GetPageObjectCount() != 1)
+    return {};
+
+  CPDF_ImageObject* pImageObject = (*begin())->AsImage();
+  if (!pImageObject)
+    return {};
+
+  return {{pImageObject->GetIndependentBitmap(), pImageObject->matrix()}};
 }

@@ -11,7 +11,6 @@
 
 #include "core/fpdfapi/parser/cpdf_document.h"
 #include "fpdfsdk/cpdfsdk_formfillenvironment.h"
-#include "fpdfsdk/cpdfsdk_helpers.h"
 #include "fpdfsdk/cpdfsdk_pageview.h"
 #include "fpdfsdk/fpdfxfa/cpdfxfa_page.h"
 #include "fpdfsdk/fpdfxfa/cxfa_fwladaptertimermgr.h"
@@ -20,7 +19,6 @@
 #include "public/fpdf_formfill.h"
 #include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
-#include "xfa/fgas/font/cfgas_defaultfontmanager.h"
 #include "xfa/fxfa/cxfa_eventparam.h"
 #include "xfa/fxfa/cxfa_ffapp.h"
 #include "xfa/fxfa/cxfa_ffdoc.h"
@@ -105,13 +103,13 @@ bool CPDFXFA_Context::LoadXFADoc() {
   m_pXFADoc =
       CXFA_FFDoc::CreateAndOpen(m_pXFAApp.get(), &m_DocEnv, m_pPDFDoc.Get());
   if (!m_pXFADoc) {
-    SetLastError(FPDF_ERR_XFALOAD);
+    FXSYS_SetLastError(FPDF_ERR_XFALOAD);
     return false;
   }
 
   CJS_Runtime* actual_runtime = GetCJSRuntime();  // Null if a stub.
   if (!actual_runtime) {
-    SetLastError(FPDF_ERR_XFALOAD);
+    FXSYS_SetLastError(FPDF_ERR_XFALOAD);
     return false;
   }
 
@@ -124,7 +122,7 @@ bool CPDFXFA_Context::LoadXFADoc() {
   m_pXFADocView = m_pXFADoc->CreateDocView();
   if (m_pXFADocView->StartLayout() < 0) {
     CloseXFADoc();
-    SetLastError(FPDF_ERR_XFALAYOUT);
+    FXSYS_SetLastError(FPDF_ERR_XFALAYOUT);
     return false;
   }
 
@@ -305,5 +303,6 @@ bool CPDFXFA_Context::PutRequestURL(const WideString& wsURL,
 std::unique_ptr<IFWL_AdapterTimerMgr> CPDFXFA_Context::NewTimerMgr() {
   if (!m_pFormFillEnv)
     return nullptr;
-  return pdfium::MakeUnique<CXFA_FWLAdapterTimerMgr>(m_pFormFillEnv.Get());
+  return pdfium::MakeUnique<CXFA_FWLAdapterTimerMgr>(
+      m_pFormFillEnv->GetTimerHandler());
 }

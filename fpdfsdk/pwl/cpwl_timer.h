@@ -7,29 +7,34 @@
 #ifndef FPDFSDK_PWL_CPWL_TIMER_H_
 #define FPDFSDK_PWL_CPWL_TIMER_H_
 
+#include "core/fxcrt/timerhandler_iface.h"
 #include "core/fxcrt/unowned_ptr.h"
-#include "fpdfsdk/cfx_systemhandler.h"
 
 class CPWL_TimerHandler;
 
 class CPWL_Timer {
  public:
-  CPWL_Timer(CPWL_TimerHandler* pAttached, CFX_SystemHandler* pSystemHandler);
+  class CallbackIface {
+   public:
+    virtual ~CallbackIface() = default;
+    virtual void OnTimerFired() = 0;
+  };
+
+  CPWL_Timer(TimerHandlerIface* pTimerHandler,
+             CallbackIface* pCallbackIface,
+             int32_t nInterval);
   ~CPWL_Timer();
 
+ private:
   static void TimerProc(int32_t idEvent);
 
-  int32_t SetPWLTimer(int32_t nElapse);
-  void KillPWLTimer();
-
- private:
   bool HasValidID() const {
-    return m_nTimerID != CFX_SystemHandler::kInvalidTimerID;
+    return m_nTimerID != TimerHandlerIface::kInvalidTimerID;
   }
 
-  int32_t m_nTimerID = CFX_SystemHandler::kInvalidTimerID;
-  UnownedPtr<CPWL_TimerHandler> const m_pAttached;
-  UnownedPtr<CFX_SystemHandler> const m_pSystemHandler;
+  const int32_t m_nTimerID;
+  UnownedPtr<TimerHandlerIface> const m_pTimerHandler;
+  UnownedPtr<CallbackIface> const m_pCallbackIface;
 };
 
 #endif  // FPDFSDK_PWL_CPWL_TIMER_H_

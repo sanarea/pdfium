@@ -18,7 +18,9 @@
 #include "core/fpdfdoc/ipdf_formnotify.h"
 #include "core/fxcrt/fx_coordinates.h"
 #include "core/fxcrt/fx_string.h"
+#include "core/fxcrt/retain_ptr.h"
 #include "core/fxge/fx_dib.h"
+#include "third_party/base/optional.h"
 
 #define TEXTPOS_CAPTION 0
 #define TEXTPOS_ICON 1
@@ -98,13 +100,14 @@ class CPDF_FormControl {
   CPDF_AAction GetAdditionalAction() const;
   CPDF_DefaultAppearance GetDefaultAppearance() const;
 
-  CPDF_Font* GetDefaultControlFont();
+  Optional<WideString> GetDefaultControlFontName() const;
   int GetControlAlignment() const;
 
   ByteString GetOnStateName() const;
   void CheckControl(bool bChecked);
 
  private:
+  RetainPtr<CPDF_Font> GetDefaultControlFont() const;
   FX_ARGB GetColor(int& iColorType, const ByteString& csEntry);
   float GetOriginalColor(int index, const ByteString& csEntry);
   void GetOriginalColor(int& iColorType,

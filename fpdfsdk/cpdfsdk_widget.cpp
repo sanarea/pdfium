@@ -26,10 +26,10 @@
 #include "core/fxge/cfx_pathdata.h"
 #include "core/fxge/cfx_renderdevice.h"
 #include "fpdfsdk/cpdfsdk_actionhandler.h"
+#include "fpdfsdk/cpdfsdk_appstream.h"
 #include "fpdfsdk/cpdfsdk_formfillenvironment.h"
 #include "fpdfsdk/cpdfsdk_interactiveform.h"
 #include "fpdfsdk/cpdfsdk_pageview.h"
-#include "fpdfsdk/pwl/cpwl_appstream.h"
 #include "fpdfsdk/pwl/cpwl_edit.h"
 
 #ifdef PDF_ENABLE_XFA
@@ -532,7 +532,7 @@ void CPDFSDK_Widget::SetCheck(bool bChecked, NotificationOption notify) {
                            notify);
 #ifdef PDF_ENABLE_XFA
   if (!IsWidgetAppearanceValid(CPDF_Annot::Normal))
-    ResetAppearance(true);
+    ResetXFAAppearance(true);
   if (notify == NotificationOption::kDoNotNotify)
     Synchronize(true);
 #endif  // PDF_ENABLE_XFA
@@ -583,7 +583,7 @@ bool CPDFSDK_Widget::IsAppModified() const {
 }
 
 #ifdef PDF_ENABLE_XFA
-void CPDFSDK_Widget::ResetAppearance(bool bValueChanged) {
+void CPDFSDK_Widget::ResetXFAAppearance(bool bValueChanged) {
   switch (GetFieldType()) {
     case FormFieldType::kTextField:
     case FormFieldType::kComboBox: {
@@ -605,7 +605,7 @@ void CPDFSDK_Widget::ResetAppearance(Optional<WideString> sValue,
   if (bValueChanged)
     m_nValueAge++;
 
-  CPWL_AppStream appStream(this, GetAPDict());
+  CPDFSDK_AppStream appStream(this, GetAPDict());
   switch (GetFieldType()) {
     case FormFieldType::kPushButton:
       appStream.SetAsPushButton();
@@ -638,11 +638,10 @@ Optional<WideString> CPDFSDK_Widget::OnFormat() {
   return m_pInteractiveForm->OnFormat(pFormField);
 }
 
-void CPDFSDK_Widget::ResetFieldAppearance(bool bValueChanged) {
+void CPDFSDK_Widget::ResetFieldAppearance() {
   CPDF_FormField* pFormField = GetFormField();
   ASSERT(pFormField);
-  m_pInteractiveForm->ResetFieldAppearance(pFormField, pdfium::nullopt,
-                                           bValueChanged);
+  m_pInteractiveForm->ResetFieldAppearance(pFormField, pdfium::nullopt);
 }
 
 void CPDFSDK_Widget::DrawAppearance(CFX_RenderDevice* pDevice,
@@ -718,20 +717,20 @@ CFX_FloatRect CPDFSDK_Widget::GetRotatedRect() const {
   float fHeight = rectAnnot.Height();
 
   CPDF_FormControl* pControl = GetFormControl();
-  CFX_FloatRect rcPDFWindow;
+  CFX_FloatRect rcPWLWindow;
   switch (abs(pControl->GetRotation() % 360)) {
     case 0:
     case 180:
     default:
-      rcPDFWindow = CFX_FloatRect(0, 0, fWidth, fHeight);
+      rcPWLWindow = CFX_FloatRect(0, 0, fWidth, fHeight);
       break;
     case 90:
     case 270:
-      rcPDFWindow = CFX_FloatRect(0, 0, fHeight, fWidth);
+      rcPWLWindow = CFX_FloatRect(0, 0, fHeight, fWidth);
       break;
   }
 
-  return rcPDFWindow;
+  return rcPWLWindow;
 }
 
 CFX_Matrix CPDFSDK_Widget::GetMatrix() const {

@@ -8,6 +8,7 @@
 #define CORE_FPDFAPI_FONT_CPDF_FONT_H_
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "build/build_config.h"
@@ -15,26 +16,57 @@
 #include "core/fpdfapi/parser/cpdf_stream_acc.h"
 #include "core/fxcrt/fx_string.h"
 #include "core/fxcrt/fx_system.h"
+#include "core/fxcrt/observed_ptr.h"
+#include "core/fxcrt/retain_ptr.h"
 #include "core/fxcrt/unowned_ptr.h"
 #include "core/fxge/cfx_font.h"
 
+class CFX_DIBitmap;
 class CFX_SubstFont;
 class CPDF_CIDFont;
 class CPDF_Document;
 class CPDF_Object;
 class CPDF_TrueTypeFont;
 class CPDF_Type1Font;
+class CPDF_Type3Char;
 class CPDF_Type3Font;
 class CPDF_ToUnicodeMap;
 
-class CPDF_Font {
+class CPDF_Font : public Retainable, public Observable {
  public:
-  static std::unique_ptr<CPDF_Font> Create(CPDF_Document* pDoc,
-                                           CPDF_Dictionary* pFontDict);
-  static CPDF_Font* GetStockFont(CPDF_Document* pDoc, ByteStringView fontname);
+  // Callback mechanism for Type3 fonts to get pixels from forms.
+  class FormIface {
+   public:
+    virtual ~FormIface() {}
+
+    virtual void ParseContentForType3Char(CPDF_Type3Char* pChar) = 0;
+    virtual bool HasPageObjects() const = 0;
+    virtual CFX_FloatRect CalcBoundingBox() const = 0;
+    virtual Optional<std::pair<RetainPtr<CFX_DIBitmap>, CFX_Matrix>>
+    GetBitmapAndMatrixFromSoleImageOfForm() const = 0;
+  };
+
+  // Callback mechanism for Type3 fonts to get new forms from upper layers.
+  class FormFactoryIface {
+   public:
+    virtual ~FormFactoryIface() {}
+
+    virtual std::unique_ptr<FormIface> CreateForm(
+        CPDF_Document* pDocument,
+        CPDF_Dictionary* pPageResources,
+        CPDF_Stream* pFormStream) = 0;
+  };
+
   static const uint32_t kInvalidCharCode = static_cast<uint32_t>(-1);
 
-  virtual ~CPDF_Font();
+  // |pFactory| only required for Type3 fonts.
+  static RetainPtr<CPDF_Font> Create(CPDF_Document* pDoc,
+                                     CPDF_Dictionary* pFontDict,
+                                     FormFactoryIface* pFactory);
+  static RetainPtr<CPDF_Font> GetStockFont(CPDF_Document* pDoc,
+                                           ByteStringView fontname);
+
+  ~CPDF_Font() override;
 
   virtual bool IsType1Font() const;
   virtual bool IsTrueTypeFont() const;
@@ -49,6 +81,7 @@ class CPDF_Font {
   virtual const CPDF_CIDFont* AsCIDFont() const;
   virtual CPDF_CIDFont* AsCIDFont();
 
+  virtual void WillBeDestroyed();
   virtual bool IsVertWriting() const;
   virtual bool IsUnicodeCompatible() const;
   virtual uint32_t GetNextChar(ByteStringView pString, size_t* pOffset) const;
@@ -62,7 +95,7 @@ class CPDF_Font {
   virtual uint32_t CharCodeFromUnicode(wchar_t Unicode) const;
   virtual bool HasFontWidths() const;
 
-  ByteString GetBaseFont() const { return m_BaseFont; }
+  ByteString GetBaseFontName() const { return m_BaseFontName; }
   CFX_SubstFont* GetSubstFont() const { return m_Font.GetSubstFont(); }
   bool IsEmbedded() const { return IsType3Font() || m_pFontFile != nullptr; }
   CPDF_Dictionary* GetFontDict() const { return m_pFontDict.Get(); }
@@ -113,7 +146,7 @@ class CPDF_Font {
   std::vector<std::unique_ptr<CFX_Font>> m_FontFallbacks;
   RetainPtr<CPDF_StreamAcc> m_pFontFile;
   RetainPtr<CPDF_Dictionary> m_pFontDict;
-  ByteString m_BaseFont;
+  ByteString m_BaseFontName;
   mutable std::unique_ptr<CPDF_ToUnicodeMap> m_pToUnicodeMap;
   mutable bool m_bToUnicodeLoaded = false;
   int m_Flags = 0;

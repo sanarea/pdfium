@@ -402,7 +402,7 @@ std::vector<uint8_t> XFA_Base64Decode(const ByteString& bsStr) {
   if (bsStr.IsEmpty())
     return result;
 
-  std::vector<uint8_t> buffer = XFA_RemoveBase64Whitespace(bsStr.AsRawSpan());
+  std::vector<uint8_t> buffer = XFA_RemoveBase64Whitespace(bsStr.raw_span());
   result.reserve(3 * (buffer.size() / 4));
 
   uint32_t dwLimb = 0;
@@ -488,7 +488,7 @@ RetainPtr<CFX_DIBitmap> XFA_LoadImageData(CXFA_FFDoc* pDoc,
     } else {
       bsData = wsImage.ToDefANSI();
       pImageFileRead =
-          pdfium::MakeRetain<CFX_ReadOnlyMemoryStream>(bsData.AsRawSpan());
+          pdfium::MakeRetain<CFX_ReadOnlyMemoryStream>(bsData.raw_span());
     }
   } else {
     WideString wsURL = wsHref;
@@ -703,7 +703,7 @@ CXFA_Node* FindFirstSiblingNamed(CXFA_Node* parent, uint32_t dwNameHash) {
 CXFA_Node* FindFirstSiblingNamedInList(CXFA_Node* parent,
                                        uint32_t dwNameHash,
                                        uint32_t dwFilter) {
-  for (CXFA_Node* child : parent->GetNodeList(dwFilter, XFA_Element::Unknown)) {
+  for (CXFA_Node* child : parent->GetNodeListWithFilter(dwFilter)) {
     if (child->GetNameHash() == dwNameHash)
       return child;
 
@@ -727,7 +727,7 @@ CXFA_Node* FindFirstSiblingOfClass(CXFA_Node* parent, XFA_Element element) {
 CXFA_Node* FindFirstSiblingOfClassInList(CXFA_Node* parent,
                                          XFA_Element element,
                                          uint32_t dwFilter) {
-  for (CXFA_Node* child : parent->GetNodeList(dwFilter, XFA_Element::Unknown)) {
+  for (CXFA_Node* child : parent->GetNodeListWithFilter(dwFilter)) {
     if (child->GetElementType() == element)
       return child;
 
@@ -768,7 +768,7 @@ void TraverseSiblings(CXFA_Node* parent,
 
   if (bIsFindProperty) {
     for (CXFA_Node* child :
-         parent->GetNodeList(XFA_NODEFILTER_Properties, XFA_Element::Unknown)) {
+         parent->GetNodeListWithFilter(XFA_NODEFILTER_Properties)) {
       if (bIsClassName) {
         if (child->GetClassHashCode() == dwNameHash)
           pSiblings->push_back(child);
@@ -790,7 +790,7 @@ void TraverseSiblings(CXFA_Node* parent,
       return;
   }
   for (CXFA_Node* child :
-       parent->GetNodeList(XFA_NODEFILTER_Children, XFA_Element::Unknown)) {
+       parent->GetNodeListWithFilter(XFA_NODEFILTER_Children)) {
     if (child->GetElementType() == XFA_Element::Variables)
       continue;
 
@@ -1097,20 +1097,20 @@ XFA_AttributeType CXFA_Node::GetAttributeType(XFA_Attribute type) const {
   return data ? data->type : XFA_AttributeType::CData;
 }
 
-std::vector<CXFA_Node*> CXFA_Node::GetNodeList(uint32_t dwTypeFilter,
-                                               XFA_Element eTypeFilter) {
-  if (eTypeFilter != XFA_Element::Unknown) {
-    std::vector<CXFA_Node*> nodes;
-    for (CXFA_Node* pChild = GetFirstChild(); pChild;
-         pChild = pChild->GetNextSibling()) {
-      if (pChild->GetElementType() == eTypeFilter)
-        nodes.push_back(pChild);
-    }
-    return nodes;
+std::vector<CXFA_Node*> CXFA_Node::GetNodeListForType(XFA_Element eTypeFilter) {
+  std::vector<CXFA_Node*> nodes;
+  for (CXFA_Node* pChild = GetFirstChild(); pChild;
+       pChild = pChild->GetNextSibling()) {
+    if (pChild->GetElementType() == eTypeFilter)
+      nodes.push_back(pChild);
   }
+  return nodes;
+}
 
+std::vector<CXFA_Node*> CXFA_Node::GetNodeListWithFilter(
+    uint32_t dwTypeFilter) {
+  std::vector<CXFA_Node*> nodes;
   if (dwTypeFilter == (XFA_NODEFILTER_Children | XFA_NODEFILTER_Properties)) {
-    std::vector<CXFA_Node*> nodes;
     for (CXFA_Node* pChild = GetFirstChild(); pChild;
          pChild = pChild->GetNextSibling())
       nodes.push_back(pChild);
@@ -1118,12 +1118,11 @@ std::vector<CXFA_Node*> CXFA_Node::GetNodeList(uint32_t dwTypeFilter,
   }
 
   if (dwTypeFilter == 0)
-    return std::vector<CXFA_Node*>();
+    return nodes;
 
   bool bFilterChildren = !!(dwTypeFilter & XFA_NODEFILTER_Children);
   bool bFilterProperties = !!(dwTypeFilter & XFA_NODEFILTER_Properties);
   bool bFilterOneOfProperties = !!(dwTypeFilter & XFA_NODEFILTER_OneOfProperty);
-  std::vector<CXFA_Node*> nodes;
   for (CXFA_Node* pChild = GetFirstChild(); pChild;
        pChild = pChild->GetNextSibling()) {
     if (HasProperty(pChild->GetElementType())) {
@@ -1286,7 +1285,7 @@ CXFA_Node* CXFA_Node::GetContainerNode() {
       return nullptr;
 
     CXFA_Node* pFieldNode = nullptr;
-    for (auto* pFormNode : *(pDataNode->GetBindItems())) {
+    for (auto* pFormNode : pDataNode->GetBindItemsCopy()) {
       if (!pFormNode || pFormNode->HasRemovedChildren())
         continue;
       pFieldNode = pFormNode->IsWidgetReady() ? pFormNode : nullptr;
@@ -1521,7 +1520,8 @@ void CXFA_Node::InsertChildAndNotify(CXFA_Node* pNode, CXFA_Node* pBeforeNode) {
 
 void CXFA_Node::RemoveChildAndNotify(CXFA_Node* pNode, bool bNotify) {
   CHECK(pNode);
-  CHECK_EQ(pNode->GetParent(), this);
+  if (pNode->GetParent() != this)
+    return;
 
   pNode->SetFlag(XFA_NodeFlag_HasRemovedChildren);
   TreeNode<CXFA_Node>::RemoveChild(pNode);
@@ -2957,7 +2957,7 @@ std::vector<CXFA_Event*> CXFA_Node::GetEventByActivity(
     XFA_AttributeValue iActivity,
     bool bIsFormReady) {
   std::vector<CXFA_Event*> events;
-  for (CXFA_Node* node : GetNodeList(0, XFA_Element::Event)) {
+  for (CXFA_Node* node : GetNodeListForType(XFA_Element::Event)) {
     auto* event = static_cast<CXFA_Event*>(node);
     if (event->GetActivity() != iActivity)
       continue;
@@ -4258,27 +4258,12 @@ std::vector<int32_t> CXFA_Node::GetSelectedItems() {
 }
 
 std::vector<WideString> CXFA_Node::GetSelectedItemsValue() {
-  std::vector<WideString> wsSelTextArray;
   WideString wsValue = GetRawValue();
-  if (IsChoiceListMultiSelect()) {
-    if (!wsValue.IsEmpty()) {
-      size_t iStart = 0;
-      size_t iLength = wsValue.GetLength();
-      auto iEnd = wsValue.Find(L'\n', iStart);
-      iEnd = (!iEnd.has_value()) ? iLength : iEnd;
-      while (iEnd >= iStart) {
-        wsSelTextArray.push_back(wsValue.Mid(iStart, iEnd.value() - iStart));
-        iStart = iEnd.value() + 1;
-        if (iStart >= iLength)
-          break;
-        iEnd = wsValue.Find(L'\n', iStart);
-        if (!iEnd.has_value())
-          wsSelTextArray.push_back(wsValue.Mid(iStart, iLength - iStart));
-      }
-    }
-  } else {
-    wsSelTextArray.push_back(wsValue);
-  }
+  if (IsChoiceListMultiSelect())
+    return fxcrt::Split(wsValue, L'\n');
+
+  std::vector<WideString> wsSelTextArray;
+  wsSelTextArray.push_back(wsValue);
   return wsSelTextArray;
 }
 
@@ -5039,7 +5024,7 @@ void CXFA_Node::SetToXML(const WideString& value) {
       if (GetPacketType() == XFA_PacketType::Datasets) {
         for (CXFA_Node* pChildDataNode = GetFirstChild(); pChildDataNode;
              pChildDataNode = pChildDataNode->GetNextSibling()) {
-          if (!pChildDataNode->GetBindItems()->empty()) {
+          if (pChildDataNode->HasBindItems()) {
             bDeleteChildren = false;
             break;
           }

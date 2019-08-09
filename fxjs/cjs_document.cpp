@@ -8,13 +8,13 @@
 
 #include <utility>
 
-#include "core/fpdfapi/font/cpdf_font.h"
 #include "core/fpdfapi/page/cpdf_pageobject.h"
 #include "core/fpdfapi/page/cpdf_textobject.h"
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_name.h"
 #include "core/fpdfapi/parser/cpdf_string.h"
+#include "core/fpdfapi/render/cpdf_pagerendercache.h"
 #include "core/fpdfdoc/cpdf_interactiveform.h"
 #include "core/fpdfdoc/cpdf_nametree.h"
 #include "fpdfsdk/cpdfsdk_annotiteration.h"
@@ -27,75 +27,6 @@
 #include "fxjs/cjs_field.h"
 #include "fxjs/cjs_icon.h"
 #include "fxjs/js_resources.h"
-
-namespace {
-
-#define ISLATINWORD(u) (u != 0x20 && u <= 0x28FF)
-
-int CountWords(const CPDF_TextObject* pTextObj) {
-  CPDF_Font* pFont = pTextObj->GetFont();
-  if (!pFont)
-    return 0;
-
-  bool bInLatinWord = false;
-  int nWords = 0;
-  for (size_t i = 0, sz = pTextObj->CountChars(); i < sz; ++i) {
-    uint32_t charcode = CPDF_Font::kInvalidCharCode;
-    float unused_kerning;
-
-    pTextObj->GetCharInfo(i, &charcode, &unused_kerning);
-    WideString swUnicode = pFont->UnicodeFromCharCode(charcode);
-
-    uint16_t unicode = 0;
-    if (swUnicode.GetLength() > 0)
-      unicode = swUnicode[0];
-
-    bool bIsLatin = ISLATINWORD(unicode);
-    if (bIsLatin && bInLatinWord)
-      continue;
-
-    bInLatinWord = bIsLatin;
-    if (unicode != 0x20)
-      nWords++;
-  }
-
-  return nWords;
-}
-
-WideString GetObjWordStr(const CPDF_TextObject* pTextObj, int nWordIndex) {
-  CPDF_Font* pFont = pTextObj->GetFont();
-  if (!pFont)
-    return WideString();
-
-  WideString swRet;
-  int nWords = 0;
-  bool bInLatinWord = false;
-  for (size_t i = 0, sz = pTextObj->CountChars(); i < sz; ++i) {
-    uint32_t charcode = CPDF_Font::kInvalidCharCode;
-    float unused_kerning;
-
-    pTextObj->GetCharInfo(i, &charcode, &unused_kerning);
-    WideString swUnicode = pFont->UnicodeFromCharCode(charcode);
-
-    uint16_t unicode = 0;
-    if (swUnicode.GetLength() > 0)
-      unicode = swUnicode[0];
-
-    bool bIsLatin = ISLATINWORD(unicode);
-    if (!bIsLatin || !bInLatinWord) {
-      bInLatinWord = bIsLatin;
-      if (unicode != 0x20)
-        nWords++;
-    }
-
-    if (nWords - 1 == nWordIndex)
-      swRet += unicode;
-  }
-
-  return swRet;
-}
-
-}  // namespace
 
 const JSPropertySpec CJS_Document::PropertySpecs[] = {
     {"ADBE", get_ADBE_static, set_ADBE_static},
@@ -1309,7 +1240,8 @@ CJS_Result CJS_Document::getPageNthWord(
   if (!pPageDict)
     return CJS_Result::Failure(JSMessage::kBadObjectError);
 
-  auto page = pdfium::MakeRetain<CPDF_Page>(pDocument, pPageDict, true);
+  auto page = pdfium::MakeRetain<CPDF_Page>(pDocument, pPageDict);
+  page->SetRenderCache(pdfium::MakeUnique<CPDF_PageRenderCache>(page.Get()));
   page->ParseContent();
 
   int nWords = 0;
@@ -1317,9 +1249,9 @@ CJS_Result CJS_Document::getPageNthWord(
   for (auto& pPageObj : *page) {
     if (pPageObj->IsText()) {
       CPDF_TextObject* pTextObj = pPageObj->AsText();
-      int nObjWords = CountWords(pTextObj);
+      int nObjWords = pTextObj->CountWords();
       if (nWords + nObjWords >= nWordNo) {
-        swRet = GetObjWordStr(pTextObj, nWordNo - nWords);
+        swRet = pTextObj->GetWordString(nWordNo - nWords);
         break;
       }
       nWords += nObjWords;
@@ -1358,15 +1290,15 @@ CJS_Result CJS_Document::getPageNumWords(
   if (!pPageDict)
     return CJS_Result::Failure(JSMessage::kBadObjectError);
 
-  auto page = pdfium::MakeRetain<CPDF_Page>(pDocument, pPageDict, true);
+  auto page = pdfium::MakeRetain<CPDF_Page>(pDocument, pPageDict);
+  page->SetRenderCache(pdfium::MakeUnique<CPDF_PageRenderCache>(page.Get()));
   page->ParseContent();
 
   int nWords = 0;
   for (auto& pPageObj : *page) {
     if (pPageObj->IsText())
-      nWords += CountWords(pPageObj->AsText());
+      nWords += pPageObj->AsText()->CountWords();
   }
-
   return CJS_Result::Success(pRuntime->NewNumber(nWords));
 }
 

@@ -12,11 +12,11 @@
 #include <vector>
 
 #include "core/fpdfapi/font/cpdf_type3font.h"
+#include "core/fpdfapi/page/cpdf_dibbase.h"
 #include "core/fpdfapi/page/cpdf_function.h"
+#include "core/fpdfapi/page/cpdf_transferfunc.h"
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_document.h"
-#include "core/fpdfapi/render/cpdf_dibbase.h"
-#include "core/fpdfapi/render/cpdf_transferfunc.h"
 #include "core/fpdfapi/render/cpdf_type3cache.h"
 
 namespace {
@@ -38,18 +38,12 @@ CPDF_DocRenderData::~CPDF_DocRenderData() = default;
 RetainPtr<CPDF_Type3Cache> CPDF_DocRenderData::GetCachedType3(
     CPDF_Type3Font* pFont) {
   auto it = m_Type3FaceMap.find(pFont);
-  if (it != m_Type3FaceMap.end())
-    return it->second;
+  if (it != m_Type3FaceMap.end() && it->second)
+    return pdfium::WrapRetain(it->second.Get());
 
   auto pCache = pdfium::MakeRetain<CPDF_Type3Cache>(pFont);
-  m_Type3FaceMap[pFont] = pCache;
+  m_Type3FaceMap[pFont].Reset(pCache.Get());
   return pCache;
-}
-
-void CPDF_DocRenderData::MaybePurgeCachedType3(CPDF_Type3Font* pFont) {
-  auto it = m_Type3FaceMap.find(pFont);
-  if (it != m_Type3FaceMap.end() && it->second->HasOneRef())
-    m_Type3FaceMap.erase(it);
 }
 
 RetainPtr<CPDF_TransferFunc> CPDF_DocRenderData::GetTransferFunc(
@@ -58,17 +52,12 @@ RetainPtr<CPDF_TransferFunc> CPDF_DocRenderData::GetTransferFunc(
     return nullptr;
 
   auto it = m_TransferFuncMap.find(pObj);
-  if (it != m_TransferFuncMap.end())
-    return it->second;
+  if (it != m_TransferFuncMap.end() && it->second)
+    return pdfium::WrapRetain(it->second.Get());
 
-  m_TransferFuncMap[pObj] = CreateTransferFunc(pObj);
-  return m_TransferFuncMap[pObj];
-}
-
-void CPDF_DocRenderData::MaybePurgeTransferFunc(const CPDF_Object* pObj) {
-  auto it = m_TransferFuncMap.find(pObj);
-  if (it != m_TransferFuncMap.end() && it->second->HasOneRef())
-    m_TransferFuncMap.erase(it);
+  auto pFunc = CreateTransferFunc(pObj);
+  m_TransferFuncMap[pObj].Reset(pFunc.Get());
+  return pFunc;
 }
 
 RetainPtr<CPDF_TransferFunc> CPDF_DocRenderData::CreateTransferFunc(

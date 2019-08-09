@@ -8,7 +8,6 @@
 
 #include <utility>
 
-#include "core/fpdfapi/page/cpdf_imageobject.h"
 #include "core/fxge/dib/cfx_dibitmap.h"
 #include "core/fxge/fx_dib.h"
 #include "third_party/base/ptr_util.h"
@@ -40,12 +39,11 @@ bool CPDF_Type3Char::LoadBitmapFromSoleImageOfForm() {
   if (m_bColored)
     return false;
 
-  const CPDF_ImageObject* pImageObject = m_pForm->GetSoleImageOfForm();
-  if (!pImageObject)
+  auto result = m_pForm->GetBitmapAndMatrixFromSoleImageOfForm();
+  if (!result.has_value())
     return false;
 
-  m_ImageMatrix = pImageObject->matrix();
-  m_pBitmap = pImageObject->GetIndependentBitmap();
+  std::tie(m_pBitmap, m_ImageMatrix) = result.value();
   m_pForm.reset();
   return true;
 }
@@ -60,7 +58,13 @@ void CPDF_Type3Char::InitializeFromStreamData(bool bColored,
   m_BBox.top = FXSYS_round(TextUnitToGlyphUnit(pData[5]));
 }
 
-void CPDF_Type3Char::Transform(FormIface* pForm, const CFX_Matrix& matrix) {
+void CPDF_Type3Char::WillBeDestroyed() {
+  // Break cycles.
+  m_pForm.reset();
+}
+
+void CPDF_Type3Char::Transform(CPDF_Font::FormIface* pForm,
+                               const CFX_Matrix& matrix) {
   m_Width = m_Width * matrix.GetXUnit() + 0.5f;
 
   CFX_FloatRect char_rect;
@@ -74,7 +78,7 @@ void CPDF_Type3Char::Transform(FormIface* pForm, const CFX_Matrix& matrix) {
   m_BBox = matrix.TransformRect(char_rect).ToRoundedFxRect();
 }
 
-void CPDF_Type3Char::SetForm(std::unique_ptr<FormIface> pForm) {
+void CPDF_Type3Char::SetForm(std::unique_ptr<CPDF_Font::FormIface> pForm) {
   m_pForm = std::move(pForm);
 }
 

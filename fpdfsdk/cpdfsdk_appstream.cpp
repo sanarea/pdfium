@@ -4,11 +4,12 @@
 
 // Original code copyright 2014 Foxit Software Inc. http://www.foxitsoftware.com
 
-#include "fpdfsdk/pwl/cpwl_appstream.h"
+#include "fpdfsdk/cpdfsdk_appstream.h"
 
 #include <utility>
 
 #include "constants/form_flags.h"
+#include "core/fpdfapi/font/cpdf_font.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_document.h"
 #include "core/fpdfapi/parser/cpdf_name.h"
@@ -1116,12 +1117,13 @@ void SetDefaultIconName(CPDF_Stream* pIcon, const char* name) {
 
 }  // namespace
 
-CPWL_AppStream::CPWL_AppStream(CPDFSDK_Widget* widget, CPDF_Dictionary* dict)
+CPDFSDK_AppStream::CPDFSDK_AppStream(CPDFSDK_Widget* widget,
+                                     CPDF_Dictionary* dict)
     : widget_(widget), dict_(dict) {}
 
-CPWL_AppStream::~CPWL_AppStream() {}
+CPDFSDK_AppStream::~CPDFSDK_AppStream() {}
 
-void CPWL_AppStream::SetAsPushButton() {
+void CPDFSDK_AppStream::SetAsPushButton() {
   CPDF_FormControl* pControl = widget_->GetFormControl();
   CFX_FloatRect rcWindow = widget_->GetRotatedRect();
   ButtonStyle nLayout = ButtonStyle::kLabel;
@@ -1309,7 +1311,7 @@ void CPWL_AppStream::SetAsPushButton() {
   }
 }
 
-void CPWL_AppStream::SetAsCheckBox() {
+void CPDFSDK_AppStream::SetAsCheckBox() {
   CPDF_FormControl* pControl = widget_->GetFormControl();
   CFX_Color crBackground, crBorder, crText;
   int iColorType;
@@ -1424,7 +1426,7 @@ void CPWL_AppStream::SetAsCheckBox() {
     widget_->SetAppState("Off");
 }
 
-void CPWL_AppStream::SetAsRadioButton() {
+void CPDFSDK_AppStream::SetAsRadioButton() {
   CPDF_FormControl* pControl = widget_->GetFormControl();
   CFX_Color crBackground;
   CFX_Color crBorder;
@@ -1577,7 +1579,7 @@ void CPWL_AppStream::SetAsRadioButton() {
     widget_->SetAppState("Off");
 }
 
-void CPWL_AppStream::SetAsComboBox(Optional<WideString> sValue) {
+void CPDFSDK_AppStream::SetAsComboBox(Optional<WideString> sValue) {
   CPDF_FormControl* pControl = widget_->GetFormControl();
   CPDF_FormField* pField = pControl->GetField();
   std::ostringstream sBody;
@@ -1647,7 +1649,7 @@ void CPWL_AppStream::SetAsComboBox(Optional<WideString> sValue) {
         ByteString());
 }
 
-void CPWL_AppStream::SetAsListBox() {
+void CPDFSDK_AppStream::SetAsListBox() {
   CPDF_FormControl* pControl = widget_->GetFormControl();
   CPDF_FormField* pField = pControl->GetField();
   CFX_FloatRect rcClient = widget_->GetClientRect();
@@ -1731,7 +1733,7 @@ void CPWL_AppStream::SetAsListBox() {
         ByteString());
 }
 
-void CPWL_AppStream::SetAsTextField(Optional<WideString> sValue) {
+void CPDFSDK_AppStream::SetAsTextField(Optional<WideString> sValue) {
   CPDF_FormControl* pControl = widget_->GetFormControl();
   CPDF_FormField* pField = pControl->GetField();
   std::ostringstream sBody;
@@ -1776,10 +1778,9 @@ void CPWL_AppStream::SetAsTextField(Optional<WideString> sValue) {
   if (nMaxLen > 0) {
     if (bCharArray) {
       pEdit->SetCharArray(nMaxLen);
-
       if (IsFloatZero(fFontSize)) {
-        fFontSize = CPWL_Edit::GetCharArrayAutoFontSize(font_map.GetPDFFont(0),
-                                                        rcClient, nMaxLen);
+        fFontSize = CPWL_Edit::GetCharArrayAutoFontSize(
+            font_map.GetPDFFont(0).Get(), rcClient, nMaxLen);
       }
     } else {
       if (sValue.has_value())
@@ -1880,7 +1881,8 @@ void CPWL_AppStream::SetAsTextField(Optional<WideString> sValue) {
         ByteString());
 }
 
-void CPWL_AppStream::AddImage(const ByteString& sAPType, CPDF_Stream* pImage) {
+void CPDFSDK_AppStream::AddImage(const ByteString& sAPType,
+                                 CPDF_Stream* pImage) {
   CPDF_Stream* pStream = dict_->GetStreamFor(sAPType);
   CPDF_Dictionary* pStreamDict = pStream->GetDict();
   ByteString sImageAlias = "IMG";
@@ -1902,9 +1904,9 @@ void CPWL_AppStream::AddImage(const ByteString& sAPType, CPDF_Stream* pImage) {
                                       pImage->GetObjNum());
 }
 
-void CPWL_AppStream::Write(const ByteString& sAPType,
-                           const ByteString& sContents,
-                           const ByteString& sAPState) {
+void CPDFSDK_AppStream::Write(const ByteString& sAPType,
+                              const ByteString& sContents,
+                              const ByteString& sAPState) {
   CPDF_Stream* pStream = nullptr;
   CPDF_Dictionary* pParentDict = nullptr;
   if (sAPState.IsEmpty()) {
@@ -1937,14 +1939,14 @@ void CPWL_AppStream::Write(const ByteString& sAPType,
   }
   pStreamDict->SetMatrixFor("Matrix", widget_->GetMatrix());
   pStreamDict->SetRectFor("BBox", widget_->GetRotatedRect());
-  pStream->SetDataAndRemoveFilter(sContents.AsRawSpan());
+  pStream->SetDataAndRemoveFilter(sContents.raw_span());
 }
 
-void CPWL_AppStream::Remove(const ByteString& sAPType) {
+void CPDFSDK_AppStream::Remove(const ByteString& sAPType) {
   dict_->RemoveFor(sAPType);
 }
 
-ByteString CPWL_AppStream::GetBackgroundAppStream() const {
+ByteString CPDFSDK_AppStream::GetBackgroundAppStream() const {
   CFX_Color crBackground = widget_->GetFillPWLColor();
   if (crBackground.nColorType != CFX_Color::kTransparent)
     return GetRectFillAppStream(widget_->GetRotatedRect(), crBackground);
@@ -1952,7 +1954,7 @@ ByteString CPWL_AppStream::GetBackgroundAppStream() const {
   return ByteString();
 }
 
-ByteString CPWL_AppStream::GetBorderAppStream() const {
+ByteString CPDFSDK_AppStream::GetBorderAppStream() const {
   CFX_FloatRect rcWindow = widget_->GetRotatedRect();
   CFX_Color crBorder = widget_->GetBorderPWLColor();
   CFX_Color crBackground = widget_->GetFillPWLColor();

@@ -4,11 +4,12 @@
 
 // Original code copyright 2014 Foxit Software Inc. http://www.foxitsoftware.com
 
-#ifndef CORE_FPDFAPI_RENDER_CPDF_TRANSFERFUNC_H_
-#define CORE_FPDFAPI_RENDER_CPDF_TRANSFERFUNC_H_
+#ifndef CORE_FPDFAPI_PAGE_CPDF_TRANSFERFUNC_H_
+#define CORE_FPDFAPI_PAGE_CPDF_TRANSFERFUNC_H_
 
 #include <vector>
 
+#include "core/fxcrt/observed_ptr.h"
 #include "core/fxcrt/retain_ptr.h"
 #include "core/fxcrt/unowned_ptr.h"
 #include "core/fxge/fx_dib.h"
@@ -17,7 +18,7 @@
 class CPDF_Document;
 class CFX_DIBBase;
 
-class CPDF_TransferFunc final : public Retainable {
+class CPDF_TransferFunc final : public Retainable, public Observable {
  public:
   template <typename T, typename... Args>
   friend RetainPtr<T> pdfium::MakeRetain(Args&&... args);
@@ -51,4 +52,4 @@ class CPDF_TransferFunc final : public Retainable {
   const std::vector<uint8_t> m_SamplesB;
 };
 
-#endif  // CORE_FPDFAPI_RENDER_CPDF_TRANSFERFUNC_H_
+#endif  // CORE_FPDFAPI_PAGE_CPDF_TRANSFERFUNC_H_

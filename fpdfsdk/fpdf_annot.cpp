@@ -774,7 +774,7 @@ FPDFAnnot_SetAP(FPDF_ANNOTATION annot,
 
     ByteString newValue = PDF_EncodeText(WideStringFromFPDFWideString(value));
     auto* pNewApStream = pApDict->SetNewFor<CPDF_Stream>(modeKey);
-    pNewApStream->SetData(newValue.AsRawSpan());
+    pNewApStream->SetData(newValue.raw_span());
   } else {
     if (pApDict) {
       if (appearanceMode == FPDF_ANNOT_APPEARANCEMODE_NORMAL)
@@ -841,15 +841,9 @@ FPDF_EXPORT FPDF_BOOL FPDF_CALLCONV FPDFAnnot_SetFlags(FPDF_ANNOTATION annot,
 }
 
 FPDF_EXPORT int FPDF_CALLCONV
-FPDFAnnot_GetFormFieldFlags(FPDF_FORMHANDLE hHandle,
-                            FPDF_PAGE page,
-                            FPDF_ANNOTATION annot) {
+FPDFAnnot_GetFormFieldFlags(FPDF_FORMHANDLE hHandle, FPDF_ANNOTATION annot) {
   CPDFSDK_InteractiveForm* pForm = FormHandleToInteractiveForm(hHandle);
   if (!pForm)
-    return FPDF_FORMFLAG_NONE;
-
-  CPDF_Page* pPage = CPDFPageFromFPDFPage(page);
-  if (!pPage)
     return FPDF_FORMFLAG_NONE;
 
   CPDF_Dictionary* pAnnotDict = GetAnnotDictFromFPDFAnnotation(annot);

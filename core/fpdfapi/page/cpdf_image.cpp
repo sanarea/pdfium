@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "constants/stream_dict_common.h"
+#include "core/fpdfapi/page/cpdf_dibbase.h"
 #include "core/fpdfapi/page/cpdf_page.h"
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_boolean.h"
@@ -22,8 +23,6 @@
 #include "core/fpdfapi/parser/cpdf_reference.h"
 #include "core/fpdfapi/parser/cpdf_stream.h"
 #include "core/fpdfapi/parser/cpdf_string.h"
-#include "core/fpdfapi/render/cpdf_dibbase.h"
-#include "core/fpdfapi/render/cpdf_pagerendercache.h"
 #include "core/fxcodec/fx_codec.h"
 #include "core/fxcodec/jpeg/jpegmodule.h"
 #include "core/fxcrt/fx_stream.h"
@@ -62,7 +61,7 @@ CPDF_Image::CPDF_Image(CPDF_Document* pDoc, uint32_t dwStreamObjNum)
 CPDF_Image::~CPDF_Image() = default;
 
 void CPDF_Image::FinishInitialization(CPDF_Dictionary* pStreamDict) {
-  m_pOC = pStreamDict->GetDictFor("OC");
+  m_pOC.Reset(pStreamDict->GetDictFor("OC"));
   m_bIsMask = !pStreamDict->KeyExist("ColorSpace") ||
               pStreamDict->GetIntegerFor("ImageMask");
   m_bInterpolate = !!pStreamDict->GetIntegerFor("Interpolate");
@@ -337,7 +336,7 @@ void CPDF_Image::SetImage(const RetainPtr<CFX_DIBitmap>& pBitmap) {
 
 void CPDF_Image::ResetCache(CPDF_Page* pPage) {
   RetainPtr<CPDF_Image> pHolder(this);
-  pPage->GetRenderCache()->ResetBitmap(pHolder);
+  pPage->GetRenderCache()->ResetBitmapForImage(pHolder);
 }
 
 RetainPtr<CFX_DIBBase> CPDF_Image::LoadDIBBase() const {
