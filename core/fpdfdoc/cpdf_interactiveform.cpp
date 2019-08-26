@@ -624,7 +624,7 @@ RetainPtr<CPDF_Font> CPDF_InteractiveForm::AddStandardFont(
   if (csFontName == "ZapfDingbats")
     return pPageData->AddStandardFont(csFontName.c_str(), nullptr);
 
-  CPDF_FontEncoding encoding(PDFFONT_ENCODING_WINANSI);
+  static const CPDF_FontEncoding encoding(PDFFONT_ENCODING_WINANSI);
   return pPageData->AddStandardFont(csFontName.c_str(), &encoding);
 }
 
@@ -879,11 +879,7 @@ bool CPDF_InteractiveForm::HasXFAForm() const {
 }
 
 void CPDF_InteractiveForm::FixPageFields(CPDF_Page* pPage) {
-  CPDF_Dictionary* pPageDict = pPage->GetDict();
-  if (!pPageDict)
-    return;
-
-  CPDF_Array* pAnnots = pPageDict->GetArrayFor("Annots");
+  CPDF_Array* pAnnots = pPage->GetDict()->GetArrayFor("Annots");
   if (!pAnnots)
     return;
 
@@ -1092,6 +1088,6 @@ std::unique_ptr<CFDF_Document> CPDF_InteractiveForm::ExportToFDF(
   return pDoc;
 }
 
-void CPDF_InteractiveForm::SetFormNotify(IPDF_FormNotify* pNotify) {
+void CPDF_InteractiveForm::SetNotifierIface(NotifierIface* pNotify) {
   m_pFormNotify = pNotify;
 }

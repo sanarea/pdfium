@@ -4,8 +4,8 @@
 
 // Original code copyright 2014 Foxit Software Inc. http://www.foxitsoftware.com
 
-#ifndef FPDFSDK_CPDFSDK_XFAWIDGETHANDLER_H_
-#define FPDFSDK_CPDFSDK_XFAWIDGETHANDLER_H_
+#ifndef FPDFSDK_FPDFXFA_CPDFXFA_WIDGETHANDLER_H_
+#define FPDFSDK_FPDFXFA_CPDFXFA_WIDGETHANDLER_H_
 
 #include <memory>
 
@@ -22,15 +22,16 @@ class CPDFSDK_PageView;
 class CXFA_FFWidget;
 class CXFA_FFWidgetHandler;
 
-class CPDFSDK_XFAWidgetHandler final : public IPDFSDK_AnnotHandler {
+class CPDFXFA_WidgetHandler final : public IPDFSDK_AnnotHandler {
  public:
-  explicit CPDFSDK_XFAWidgetHandler(CPDFSDK_FormFillEnvironment* pApp);
-  ~CPDFSDK_XFAWidgetHandler() override;
+  CPDFXFA_WidgetHandler();
+  ~CPDFXFA_WidgetHandler() override;
 
+  // IPDFSDK_AnnotHandler:
+  void SetFormFillEnvironment(
+      CPDFSDK_FormFillEnvironment* pFormFillEnv) override;
   bool CanAnswer(CPDFSDK_Annot* pAnnot) override;
   CPDFSDK_Annot* NewAnnot(CPDF_Annot* pAnnot, CPDFSDK_PageView* pPage) override;
-  CPDFSDK_Annot* NewAnnot(CXFA_FFWidget* pAnnot,
-                          CPDFSDK_PageView* pPage) override;
   void ReleaseAnnot(std::unique_ptr<CPDFSDK_Annot> pAnnot) override;
   CFX_FloatRect GetViewBBox(CPDFSDK_PageView* pPageView,
                             CPDFSDK_Annot* pAnnot) override;
@@ -94,18 +95,20 @@ class CPDFSDK_XFAWidgetHandler final : public IPDFSDK_AnnotHandler {
   bool OnKeyUp(CPDFSDK_Annot* pAnnot, int nKeyCode, int nFlag) override;
   bool OnSetFocus(ObservedPtr<CPDFSDK_Annot>* pAnnot, uint32_t nFlag) override;
   bool OnKillFocus(ObservedPtr<CPDFSDK_Annot>* pAnnot, uint32_t nFlag) override;
-  bool OnXFAChangedFocus(ObservedPtr<CPDFSDK_Annot>* pOldAnnot,
-                         ObservedPtr<CPDFSDK_Annot>* pNewAnnot) override;
   bool SetIndexSelected(ObservedPtr<CPDFSDK_Annot>* pAnnot,
                         int index,
                         bool selected) override;
   bool IsIndexSelected(ObservedPtr<CPDFSDK_Annot>* pAnnot, int index) override;
 
+  CPDFSDK_Annot* NewAnnotForXFA(CXFA_FFWidget* pAnnot, CPDFSDK_PageView* pPage);
+  bool OnXFAChangedFocus(ObservedPtr<CPDFSDK_Annot>* pOldAnnot,
+                         ObservedPtr<CPDFSDK_Annot>* pNewAnnot);
+
  private:
-  CXFA_FFWidgetHandler* GetXFAWidgetHandler(CPDFSDK_Annot* pAnnot);
+  CXFA_FFWidgetHandler* GetXFAFFWidgetHandler(CPDFSDK_Annot* pAnnot);
   uint32_t GetFWLFlags(uint32_t dwFlag);
 
-  UnownedPtr<CPDFSDK_FormFillEnvironment> const m_pFormFillEnv;
+  UnownedPtr<CPDFSDK_FormFillEnvironment> m_pFormFillEnv;
 };
 
-#endif  // FPDFSDK_CPDFSDK_XFAWIDGETHANDLER_H_
+#endif  // FPDFSDK_FPDFXFA_CPDFXFA_WIDGETHANDLER_H_

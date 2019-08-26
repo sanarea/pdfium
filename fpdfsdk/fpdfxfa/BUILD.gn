@@ -16,8 +16,10 @@ jumbo_source_set("fpdfxfa") {
     "cpdfxfa_docenvironment.h",
     "cpdfxfa_page.cpp",
     "cpdfxfa_page.h",
-    "cxfa_fwladaptertimermgr.cpp",
-    "cxfa_fwladaptertimermgr.h",
+    "cpdfxfa_widget.cpp",
+    "cpdfxfa_widget.h",
+    "cpdfxfa_widgethandler.cpp",
+    "cpdfxfa_widgethandler.h",
   ]
   deps = [
     "../../:pdfium_public_headers",
@@ -29,6 +31,7 @@ jumbo_source_set("fpdfxfa") {
     "../../xfa/fwl",
     "../../xfa/fxfa",
     "../../xfa/fxfa/parser",
+    "../../xfa/fxgraphics",
   ]
   configs += [ "../../:pdfium_core_config" ]
   visibility = [ "../../*" ]

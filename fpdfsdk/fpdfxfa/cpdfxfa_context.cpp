@@ -13,7 +13,6 @@
 #include "fpdfsdk/cpdfsdk_formfillenvironment.h"
 #include "fpdfsdk/cpdfsdk_pageview.h"
 #include "fpdfsdk/fpdfxfa/cpdfxfa_page.h"
-#include "fpdfsdk/fpdfxfa/cxfa_fwladaptertimermgr.h"
 #include "fxjs/cjs_runtime.h"
 #include "fxjs/ijs_runtime.h"
 #include "public/fpdf_formfill.h"
@@ -26,6 +25,7 @@
 #include "xfa/fxfa/cxfa_ffpageview.h"
 #include "xfa/fxfa/cxfa_ffwidgethandler.h"
 #include "xfa/fxfa/cxfa_fontmgr.h"
+#include "xfa/fxfa/cxfa_readynodeiterator.h"
 
 namespace {
 
@@ -157,7 +157,7 @@ RetainPtr<CPDFXFA_Page> CPDFXFA_Context::GetXFAPage(int page_index) {
     m_XFAPageList.resize(m_nPageCount);
   }
 
-  auto pPage = pdfium::MakeRetain<CPDFXFA_Page>(this, page_index);
+  auto pPage = pdfium::MakeRetain<CPDFXFA_Page>(GetPDFDoc(), page_index);
   if (!pPage->LoadPage())
     return nullptr;
 
@@ -202,6 +202,19 @@ void CPDFXFA_Context::DeletePage(int page_index) {
 uint32_t CPDFXFA_Context::GetUserPermissions() const {
   // See https://bugs.chromium.org/p/pdfium/issues/detail?id=499
   return 0xFFFFFFFF;
+}
+
+bool CPDFXFA_Context::ContainsExtensionForm() const {
+  return m_FormType == FormType::kXFAFull ||
+         m_FormType == FormType::kXFAForeground;
+}
+
+bool CPDFXFA_Context::ContainsExtensionFullForm() const {
+  return m_FormType == FormType::kXFAFull;
+}
+
+bool CPDFXFA_Context::ContainsExtensionForegroundForm() const {
+  return m_FormType == FormType::kXFAForeground;
 }
 
 void CPDFXFA_Context::ClearChangeMark() {
@@ -300,9 +313,45 @@ bool CPDFXFA_Context::PutRequestURL(const WideString& wsURL,
          m_pFormFillEnv->PutRequestURL(wsURL, wsData, wsEncode);
 }
 
-std::unique_ptr<IFWL_AdapterTimerMgr> CPDFXFA_Context::NewTimerMgr() {
-  if (!m_pFormFillEnv)
-    return nullptr;
-  return pdfium::MakeUnique<CXFA_FWLAdapterTimerMgr>(
-      m_pFormFillEnv->GetTimerHandler());
+TimerHandlerIface* CPDFXFA_Context::GetTimerHandler() const {
+  return m_pFormFillEnv ? m_pFormFillEnv->GetTimerHandler() : nullptr;
+}
+
+void CPDFXFA_Context::SendPostSaveToXFADoc() {
+  if (!ContainsExtensionForm())
+    return;
+
+  CXFA_FFDocView* pXFADocView = GetXFADocView();
+  if (!pXFADocView)
+    return;
+
+  CXFA_FFWidgetHandler* pWidgetHandler = pXFADocView->GetWidgetHandler();
+  auto it = pXFADocView->CreateReadyNodeIterator();
+  while (CXFA_Node* pNode = it->MoveToNext()) {
+    CXFA_EventParam preParam;
+    preParam.m_eType = XFA_EVENT_PostSave;
+    pWidgetHandler->ProcessEvent(pNode, &preParam);
+  }
+  pXFADocView->UpdateDocView();
+  ClearChangeMark();
+}
+
+void CPDFXFA_Context::SendPreSaveToXFADoc(
+    std::vector<RetainPtr<IFX_SeekableStream>>* fileList) {
+  if (!ContainsExtensionForm())
+    return;
+
+  CXFA_FFDocView* pXFADocView = GetXFADocView();
+  if (!pXFADocView)
+    return;
+
+  CXFA_FFWidgetHandler* pWidgetHandler = pXFADocView->GetWidgetHandler();
+  auto it = pXFADocView->CreateReadyNodeIterator();
+  while (CXFA_Node* pNode = it->MoveToNext()) {
+    CXFA_EventParam preParam;
+    preParam.m_eType = XFA_EVENT_PreSave;
+    pWidgetHandler->ProcessEvent(pNode, &preParam);
+  }
+  pXFADocView->UpdateDocView();
+  return;
 }

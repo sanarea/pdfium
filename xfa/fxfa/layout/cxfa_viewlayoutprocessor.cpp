@@ -329,19 +329,9 @@ bool ContentAreasFitInPageAreas(const CXFA_Node* pNode,
 
 }  // namespace
 
-class CXFA_ViewRecord {
- public:
-  CXFA_ViewRecord(CXFA_ViewLayoutItem* pPageSet = nullptr,
-                  CXFA_ViewLayoutItem* pPageArea = nullptr,
-                  CXFA_ViewLayoutItem* pContentArea = nullptr)
-      : pCurPageSet(pPageSet),
-        pCurPageArea(pPageArea),
-        pCurContentArea(pContentArea) {}
+CXFA_ViewLayoutProcessor::CXFA_ViewRecord::CXFA_ViewRecord() = default;
 
-  RetainPtr<CXFA_ViewLayoutItem> pCurPageSet;
-  RetainPtr<CXFA_ViewLayoutItem> pCurPageArea;
-  RetainPtr<CXFA_ViewLayoutItem> pCurContentArea;
-};
+CXFA_ViewLayoutProcessor::CXFA_ViewRecord::~CXFA_ViewRecord() = default;
 
 CXFA_ViewLayoutProcessor::CXFA_ViewLayoutProcessor(
     CXFA_LayoutProcessor* pLayoutProcessor)
@@ -542,6 +532,9 @@ void CXFA_ViewLayoutProcessor::SubmitContentItem(
     const RetainPtr<CXFA_ContentLayoutItem>& pContentLayoutItem,
     CXFA_ContentLayoutProcessor::Result eStatus) {
   if (pContentLayoutItem) {
+    if (!HasCurrentViewRecord())
+      return;
+
     GetCurrentViewRecord()->pCurContentArea->AppendLastChild(
         pContentLayoutItem);
     m_bCreateOverFlowPage = false;
@@ -558,6 +551,9 @@ void CXFA_ViewLayoutProcessor::SubmitContentItem(
 }
 
 float CXFA_ViewLayoutProcessor::GetAvailHeight() {
+  if (!HasCurrentViewRecord())
+    return 0.0f;
+
   RetainPtr<CXFA_ViewLayoutItem> pLayoutItem =
       GetCurrentViewRecord()->pCurContentArea;
   if (!pLayoutItem || !pLayoutItem->GetFormNode())
@@ -572,15 +568,16 @@ float CXFA_ViewLayoutProcessor::GetAvailHeight() {
   return FLT_MAX;
 }
 
-CXFA_ViewRecord* CXFA_ViewLayoutProcessor::AppendNewRecord(
+CXFA_ViewLayoutProcessor::CXFA_ViewRecord*
+CXFA_ViewLayoutProcessor::AppendNewRecord(
     std::unique_ptr<CXFA_ViewRecord> pNewRecord) {
   m_ProposedViewRecords.push_back(std::move(pNewRecord));
   return m_ProposedViewRecords.back().get();
 }
 
-CXFA_ViewRecord* CXFA_ViewLayoutProcessor::CreateViewRecord(
-    CXFA_Node* pPageNode,
-    bool bCreateNew) {
+CXFA_ViewLayoutProcessor::CXFA_ViewRecord*
+CXFA_ViewLayoutProcessor::CreateViewRecord(CXFA_Node* pPageNode,
+                                           bool bCreateNew) {
   ASSERT(pPageNode);
   auto pNewRecord = pdfium::MakeUnique<CXFA_ViewRecord>();
   if (!HasCurrentViewRecord()) {
@@ -645,7 +642,8 @@ CXFA_ViewRecord* CXFA_ViewLayoutProcessor::CreateViewRecord(
   return AppendNewRecord(std::move(pNewRecord));
 }
 
-CXFA_ViewRecord* CXFA_ViewLayoutProcessor::CreateViewRecordSimple() {
+CXFA_ViewLayoutProcessor::CXFA_ViewRecord*
+CXFA_ViewLayoutProcessor::CreateViewRecordSimple() {
   auto pNewRecord = pdfium::MakeUnique<CXFA_ViewRecord>();
   if (HasCurrentViewRecord())
     *pNewRecord = *GetCurrentViewRecord();
@@ -1313,7 +1311,6 @@ CXFA_Node* CXFA_ViewLayoutProcessor::GetNextAvailPageArea(
   if (!m_pCurPageArea) {
     FindPageAreaFromPageSet(m_pTemplatePageSetRoot, nullptr, pTargetPageArea,
                             pTargetContentArea, bNewPage, bQuery);
-    ASSERT(m_pCurPageArea);
     return m_pCurPageArea;
   }
 
@@ -1508,6 +1505,9 @@ void CXFA_ViewLayoutProcessor::CreateNextMinRecord(CXFA_Node* pRecordNode) {
 }
 
 void CXFA_ViewLayoutProcessor::ProcessLastPageSet() {
+  if (!m_pCurPageArea)
+    return;
+
   CreateMinPageRecord(m_pCurPageArea, false, true);
   CreateNextMinRecord(m_pCurPageArea);
   CXFA_Node* pPageSet = m_pCurPageArea->GetParent();
@@ -1855,9 +1855,7 @@ void CXFA_ViewLayoutProcessor::SyncLayoutData() {
       nPageIdx++;
       uint32_t dwRelevant =
           XFA_WidgetStatus_Viewable | XFA_WidgetStatus_Printable;
-      CXFA_NodeIteratorTemplate<CXFA_LayoutItem,
-                                CXFA_TraverseStrategy_LayoutItem>
-          iterator(pViewItem);
+      CXFA_LayoutItemIterator iterator(pViewItem);
       CXFA_LayoutItem* pChildLayoutItem = iterator.GetCurrent();
       while (pChildLayoutItem) {
         CXFA_ContentLayoutItem* pContentItem =

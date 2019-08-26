@@ -15,20 +15,11 @@
 #include "core/fpdfdoc/cpdf_defaultappearance.h"
 #include "core/fpdfdoc/cpdf_formfield.h"
 #include "core/fpdfdoc/cpdf_iconfit.h"
-#include "core/fpdfdoc/ipdf_formnotify.h"
 #include "core/fxcrt/fx_coordinates.h"
 #include "core/fxcrt/fx_string.h"
 #include "core/fxcrt/retain_ptr.h"
 #include "core/fxge/fx_dib.h"
 #include "third_party/base/optional.h"
-
-#define TEXTPOS_CAPTION 0
-#define TEXTPOS_ICON 1
-#define TEXTPOS_BELOW 2
-#define TEXTPOS_ABOVE 3
-#define TEXTPOS_RIGHT 4
-#define TEXTPOS_LEFT 5
-#define TEXTPOS_OVERLAID 6
 
 class CFX_RenderDevice;
 class CPDF_Dictionary;

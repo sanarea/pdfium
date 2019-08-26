@@ -121,21 +121,6 @@ class CFFL_InteractiveFormFiller final : public IPWL_Filler_Notify {
                         bool selected);
   bool IsIndexSelected(ObservedPtr<CPDFSDK_Annot>* pAnnot, int index);
 
-#ifdef PDF_ENABLE_XFA
-  bool OnClick(ObservedPtr<CPDFSDK_Annot>* pAnnot,
-               CPDFSDK_PageView* pPageView,
-               uint32_t nFlag);
-  bool OnFull(ObservedPtr<CPDFSDK_Annot>* pAnnot,
-              CPDFSDK_PageView* pPageView,
-              uint32_t nFlag);
-  bool OnPreOpen(ObservedPtr<CPDFSDK_Annot>* pAnnot,
-                 CPDFSDK_PageView* pPageView,
-                 uint32_t nFlag);
-  bool OnPostOpen(ObservedPtr<CPDFSDK_Annot>* pAnnot,
-                  CPDFSDK_PageView* pPageView,
-                  uint32_t nFlag);
-#endif  // PDF_ENABLE_XFA
-
  private:
   using WidgetToFormFillerMap =
       std::map<CPDFSDK_Annot*, std::unique_ptr<CFFL_FormFiller>>;
@@ -155,12 +140,25 @@ class CFFL_InteractiveFormFiller final : public IPWL_Filler_Notify {
       int nSelEnd,
       bool bKeyDown,
       uint32_t nFlag) override;
-#ifdef PDF_ENABLE_XFA
   bool OnPopupPreOpen(const IPWL_SystemHandler::PerWindowData* pAttached,
                       uint32_t nFlag) override;
   bool OnPopupPostOpen(const IPWL_SystemHandler::PerWindowData* pAttached,
                        uint32_t nFlag) override;
+
+#ifdef PDF_ENABLE_XFA
   void SetFocusAnnotTab(CPDFSDK_Annot* pWidget, bool bSameField, bool bNext);
+  bool OnClick(ObservedPtr<CPDFSDK_Annot>* pAnnot,
+               CPDFSDK_PageView* pPageView,
+               uint32_t nFlag);
+  bool OnFull(ObservedPtr<CPDFSDK_Annot>* pAnnot,
+              CPDFSDK_PageView* pPageView,
+              uint32_t nFlag);
+  bool OnPreOpen(ObservedPtr<CPDFSDK_Annot>* pAnnot,
+                 CPDFSDK_PageView* pPageView,
+                 uint32_t nFlag);
+  bool OnPostOpen(ObservedPtr<CPDFSDK_Annot>* pAnnot,
+                  CPDFSDK_PageView* pPageView,
+                  uint32_t nFlag);
 #endif  // PDF_ENABLE_XFA
 
   CFFL_FormFiller* GetFormFiller(CPDFSDK_Annot* pAnnot);

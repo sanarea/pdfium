@@ -57,6 +57,16 @@ RetainPtr<CFGAS_GEFont> CFGAS_GEFont::LoadFont(
   return pFont;
 }
 
+// static
+RetainPtr<CFGAS_GEFont> CFGAS_GEFont::LoadStockFont(
+    CPDF_Document* pDoc,
+    CFGAS_FontMgr* pMgr,
+    const ByteString& font_family) {
+  RetainPtr<CPDF_Font> stock_font =
+      CPDF_Font::GetStockFont(pDoc, font_family.AsStringView());
+  return stock_font ? CFGAS_GEFont::LoadFont(stock_font, pMgr) : nullptr;
+}
+
 CFGAS_GEFont::CFGAS_GEFont(CFGAS_FontMgr* pFontMgr) : m_pFontMgr(pFontMgr) {}
 
 CFGAS_GEFont::~CFGAS_GEFont() = default;
@@ -138,8 +148,6 @@ uint32_t CFGAS_GEFont::GetFontStyles() const {
   if (pSubstFont) {
     if (pSubstFont->m_Weight == FXFONT_FW_BOLD)
       dwStyles |= FXFONT_BOLD;
-    if (pSubstFont->m_bFlagItalic)
-      dwStyles |= FXFONT_ITALIC;
   } else {
     if (m_pFont->IsBold())
       dwStyles |= FXFONT_BOLD;
