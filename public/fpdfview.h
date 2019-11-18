@@ -34,6 +34,16 @@
 #define FPDF_OBJECT_NULLOBJ 8
 #define FPDF_OBJECT_REFERENCE 9
 
+// PDF text rendering modes
+#define FPDF_TEXTRENDERMODE_FILL 0
+#define FPDF_TEXTRENDERMODE_STROKE 1
+#define FPDF_TEXTRENDERMODE_FILL_STROKE 2
+#define FPDF_TEXTRENDERMODE_INVISIBLE 3
+#define FPDF_TEXTRENDERMODE_FILL_CLIP 4
+#define FPDF_TEXTRENDERMODE_STROKE_CLIP 5
+#define FPDF_TEXTRENDERMODE_FILL_STROKE_CLIP 6
+#define FPDF_TEXTRENDERMODE_CLIP 7
+
 // PDF types - use incomplete types (never completed) just for API type safety.
 typedef struct fpdf_action_t__* FPDF_ACTION;
 typedef struct fpdf_annotation_t__* FPDF_ANNOTATION;
@@ -154,6 +164,9 @@ typedef int FPDF_ANNOT_APPEARANCEMODE;
 
 // Dictionary value types.
 typedef int FPDF_OBJECT_TYPE;
+
+// Text object enums.
+typedef int FPDF_TEXT_RENDERMODE;
 
 #if defined(COMPONENT_BUILD)
 // FPDF_EXPORT should be consistent with |export| in the pdfium_fuzzer
@@ -638,9 +651,9 @@ FPDF_EXPORT int FPDF_CALLCONV FPDF_GetPageSizeByIndex(FPDF_DOCUMENT document,
 #define FPDF_NO_NATIVETEXT 0x04
 // Grayscale output.
 #define FPDF_GRAYSCALE 0x08
-// Set if you want to get some debug info.
+// Obsolete, has no effect, retained for compatibility.
 #define FPDF_DEBUG_INFO 0x80
-// Set if you don't want to catch exceptions.
+// Obsolete, has no effect, retained for compatibility.
 #define FPDF_NO_CATCH 0x100
 // Limit image cache size.
 #define FPDF_RENDER_LIMITEDIMAGECACHE 0x200

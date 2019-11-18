@@ -43,7 +43,7 @@ FWL_Type CFWL_ComboBox::GetClassID() const {
   return FWL_Type::ComboBox;
 }
 
-void CFWL_ComboBox::AddString(WideStringView wsText) {
+void CFWL_ComboBox::AddString(const WideString& wsText) {
   m_pListBox->AddString(wsText);
 }
 
@@ -261,7 +261,7 @@ void CFWL_ComboBox::ShowDropList(bool bActivate) {
 
 void CFWL_ComboBox::MatchEditText() {
   WideString wsText = m_pEdit->GetText();
-  int32_t iMatch = m_pListBox->MatchItem(wsText);
+  int32_t iMatch = m_pListBox->MatchItem(wsText.AsStringView());
   if (iMatch != m_iCurSel) {
     m_pListBox->ChangeSelected(iMatch);
     if (iMatch >= 0)
@@ -558,7 +558,7 @@ void CFWL_ComboBox::OnKey(CFWL_MessageKey* pMsg) {
     int32_t iCurSel = m_iCurSel;
     if (m_pEdit) {
       WideString wsText = m_pEdit->GetText();
-      iCurSel = pComboList->MatchItem(wsText);
+      iCurSel = pComboList->MatchItem(wsText.AsStringView());
       if (iCurSel >= 0) {
         CFWL_ListItem* item = m_pListBox->GetSelItem(iCurSel);
         bMatchEqual = wsText == (item ? item->GetText() : WideString());

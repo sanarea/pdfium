@@ -131,11 +131,13 @@ CPDFSDK_Annot* CPDFSDK_PageView::AddAnnot(CXFA_FFWidget* pPDFAnnot) {
     return pSDKAnnot;
 
   CPDFSDK_AnnotHandlerMgr* pAnnotHandler = m_pFormFillEnv->GetAnnotHandlerMgr();
-  pSDKAnnot = pAnnotHandler->NewXFAAnnot(pPDFAnnot, this);
-  if (!pSDKAnnot)
-    return nullptr;
-
-  m_SDKAnnotArray.push_back(pSDKAnnot);
+  std::unique_ptr<CPDFSDK_Annot> pNewAnnot =
+      pAnnotHandler->NewXFAAnnot(pPDFAnnot, this);
+  ASSERT(pNewAnnot);
+  pSDKAnnot = pNewAnnot.get();
+  // TODO(thestig): See if |m_SDKAnnotArray|, which takes ownership of
+  // |pNewAnnot|, can hold std::unique_ptrs instead of raw pointers.
+  m_SDKAnnotArray.push_back(pNewAnnot.release());
   return pSDKAnnot;
 }
 
@@ -368,27 +370,31 @@ bool CPDFSDK_PageView::OnRButtonUp(const CFX_PointF& point, uint32_t nFlag) {
 bool CPDFSDK_PageView::OnMouseMove(const CFX_PointF& point, int nFlag) {
   CPDFSDK_AnnotHandlerMgr* pAnnotHandlerMgr =
       m_pFormFillEnv->GetAnnotHandlerMgr();
+
   ObservedPtr<CPDFSDK_Annot> pFXAnnot(GetFXAnnotAtPoint(point));
+  ObservedPtr<CPDFSDK_PageView> pThis(this);
 
   if (m_bOnWidget && m_pCaptureWidget != pFXAnnot)
     ExitWidget(pAnnotHandlerMgr, true, nFlag);
 
-  if (pFXAnnot) {
-    if (!m_bOnWidget) {
-      EnterWidget(pAnnotHandlerMgr, &pFXAnnot, nFlag);
+  // ExitWidget() may have invalidated objects.
+  if (!pThis || !pFXAnnot)
+    return false;
 
-      // Annot_OnMouseEnter may have invalidated pFXAnnot.
-      if (!pFXAnnot) {
-        ExitWidget(pAnnotHandlerMgr, false, nFlag);
-        return true;
-      }
+  if (!m_bOnWidget) {
+    EnterWidget(pAnnotHandlerMgr, &pFXAnnot, nFlag);
+
+    // EnterWidget() may have invalidated objects.
+    if (!pThis)
+      return false;
+
+    if (!pFXAnnot) {
+      ExitWidget(pAnnotHandlerMgr, false, nFlag);
+      return true;
     }
-
-    pAnnotHandlerMgr->Annot_OnMouseMove(this, &pFXAnnot, nFlag, point);
-    return true;
   }
-
-  return false;
+  pAnnotHandlerMgr->Annot_OnMouseMove(this, &pFXAnnot, nFlag, point);
+  return true;
 }
 
 void CPDFSDK_PageView::EnterWidget(CPDFSDK_AnnotHandlerMgr* pAnnotHandlerMgr,
@@ -492,10 +498,11 @@ void CPDFSDK_PageView::LoadFXAnnots() {
     }
 
     while (CXFA_FFWidget* pXFAAnnot = pWidgetHandler->MoveToNext()) {
-      CPDFSDK_Annot* pAnnot = pAnnotHandlerMgr->NewXFAAnnot(pXFAAnnot, this);
-      if (!pAnnot)
-        continue;
-      m_SDKAnnotArray.push_back(pAnnot);
+      std::unique_ptr<CPDFSDK_Annot> pNewAnnot =
+          pAnnotHandlerMgr->NewXFAAnnot(pXFAAnnot, this);
+      ASSERT(pNewAnnot);
+      CPDFSDK_Annot* pAnnot = pNewAnnot.get();
+      m_SDKAnnotArray.push_back(pNewAnnot.release());
       pAnnotHandlerMgr->Annot_OnLoad(pAnnot);
     }
 
