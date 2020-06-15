@@ -24,15 +24,14 @@
 #include "public/cpp/fpdf_scopers.h"
 #include "testing/fx_string_testhelpers.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/base/ptr_util.h"
 
 class CPDF_TestDocument final : public CPDF_Document {
  public:
   CPDF_TestDocument()
-      : CPDF_Document(pdfium::MakeUnique<CPDF_DocRenderData>(),
-                      pdfium::MakeUnique<CPDF_DocPageData>()) {}
+      : CPDF_Document(std::make_unique<CPDF_DocRenderData>(),
+                      std::make_unique<CPDF_DocPageData>()) {}
 
-  void SetRoot(CPDF_Dictionary* root) { m_pRootDict.Reset(root); }
+  void SetRoot(CPDF_Dictionary* root) { SetRootForTesting(root); }
   CPDF_IndirectObjectHolder* GetHolder() { return this; }
 };
 
@@ -45,7 +44,7 @@ class PDFDocTest : public testing::Test {
 
   void SetUp() override {
     CPDF_PageModule::Create();
-    auto pTestDoc = pdfium::MakeUnique<CPDF_TestDocument>();
+    auto pTestDoc = std::make_unique<CPDF_TestDocument>();
     m_pIndirectObjs = pTestDoc->GetHolder();
     m_pRootObj.Reset(m_pIndirectObjs->NewIndirect<CPDF_Dictionary>());
     pTestDoc->SetRoot(m_pRootObj.Get());
@@ -217,11 +216,11 @@ TEST_F(PDFDocTest, FindBookmark) {
 
 TEST_F(PDFDocTest, GetLocationInPage) {
   auto array = pdfium::MakeRetain<CPDF_Array>();
-  array->AddNew<CPDF_Number>(0);  // Page Index.
-  array->AddNew<CPDF_Name>("XYZ");
-  array->AddNew<CPDF_Number>(4);  // X
-  array->AddNew<CPDF_Number>(5);  // Y
-  array->AddNew<CPDF_Number>(6);  // Zoom.
+  array->AppendNew<CPDF_Number>(0);  // Page Index.
+  array->AppendNew<CPDF_Name>("XYZ");
+  array->AppendNew<CPDF_Number>(4);  // X
+  array->AppendNew<CPDF_Number>(5);  // Y
+  array->AppendNew<CPDF_Number>(6);  // Zoom.
 
   FPDF_BOOL hasX;
   FPDF_BOOL hasY;

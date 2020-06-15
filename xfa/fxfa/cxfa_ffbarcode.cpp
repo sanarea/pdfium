@@ -6,10 +6,10 @@
 
 #include "xfa/fxfa/cxfa_ffbarcode.h"
 
+#include <memory>
 #include <utility>
 
 #include "core/fxcrt/fx_extension.h"
-#include "third_party/base/ptr_util.h"
 #include "xfa/fwl/cfwl_app.h"
 #include "xfa/fwl/cfwl_barcode.h"
 #include "xfa/fwl/cfwl_notedriver.h"
@@ -140,20 +140,26 @@ CXFA_FFBarcode::~CXFA_FFBarcode() = default;
 
 bool CXFA_FFBarcode::LoadWidget() {
   ASSERT(!IsLoaded());
-  auto pNew = pdfium::MakeUnique<CFWL_Barcode>(GetFWLApp());
+
+  // Prevents destruction of the CXFA_ContentLayoutItem that owns |this|.
+  RetainPtr<CXFA_ContentLayoutItem> retain_layout(m_pLayoutItem.Get());
+
+  auto pNew = std::make_unique<CFWL_Barcode>(GetFWLApp());
   CFWL_Barcode* pFWLBarcode = pNew.get();
   SetNormalWidget(std::move(pNew));
-  pFWLBarcode->SetFFWidget(this);
+  pFWLBarcode->SetAdapterIface(this);
 
   CFWL_NoteDriver* pNoteDriver = pFWLBarcode->GetOwnerApp()->GetNoteDriver();
   pNoteDriver->RegisterEventTarget(pFWLBarcode, pFWLBarcode);
   m_pOldDelegate = pFWLBarcode->GetDelegate();
   pFWLBarcode->SetDelegate(this);
-  pFWLBarcode->LockUpdate();
 
-  pFWLBarcode->SetText(m_pNode->GetValue(XFA_VALUEPICTURE_Display));
-  UpdateWidgetProperty();
-  pFWLBarcode->UnlockUpdate();
+  {
+    CFWL_Widget::ScopedUpdateLock update_lock(pFWLBarcode);
+    pFWLBarcode->SetText(m_pNode->GetValue(XFA_VALUEPICTURE_Display));
+    UpdateWidgetProperty();
+  }
+
   return CXFA_FFField::LoadWidget();
 }
 
@@ -167,7 +173,7 @@ void CXFA_FFBarcode::RenderWidget(CXFA_Graphics* pGS,
   mtRotate.Concat(matrix);
 
   CXFA_FFWidget::RenderWidget(pGS, mtRotate, highlight);
-  DrawBorder(pGS, m_pNode->GetUIBorder(), m_rtUI, mtRotate);
+  DrawBorder(pGS, m_pNode->GetUIBorder(), m_UIRect, mtRotate);
   RenderCaption(pGS, &mtRotate);
   CFX_RectF rtWidget = GetNormalWidget()->GetWidgetRect();
 

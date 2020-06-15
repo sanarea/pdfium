@@ -6,6 +6,7 @@
 
 #include "fpdfsdk/cpdfsdk_appstream.h"
 
+#include <memory>
 #include <utility>
 
 #include "constants/form_flags.h"
@@ -20,6 +21,7 @@
 #include "core/fpdfapi/parser/fpdf_parser_decode.h"
 #include "core/fpdfdoc/cba_fontmap.h"
 #include "core/fpdfdoc/cpdf_formcontrol.h"
+#include "core/fpdfdoc/cpdf_icon.h"
 #include "core/fpdfdoc/cpvt_word.h"
 #include "fpdfsdk/cpdfsdk_formfillenvironment.h"
 #include "fpdfsdk/cpdfsdk_interactiveform.h"
@@ -29,7 +31,7 @@
 #include "fpdfsdk/pwl/cpwl_edit_impl.h"
 #include "fpdfsdk/pwl/cpwl_icon.h"
 #include "fpdfsdk/pwl/cpwl_wnd.h"
-#include "third_party/base/ptr_util.h"
+#include "third_party/base/stl_util.h"
 
 namespace {
 
@@ -152,8 +154,8 @@ ByteString GetAP_Check(const CFX_FloatRect& crBBox) {
                           {CFX_PointF(0.40f, 0.60f), CFX_PointF(0.28f, 0.66f),
                            CFX_PointF(0.30f, 0.56f)}};
 
-  for (size_t i = 0; i < FX_ArraySize(pts); ++i) {
-    for (size_t j = 0; j < FX_ArraySize(pts[0]); ++j) {
+  for (size_t i = 0; i < pdfium::size(pts); ++i) {
+    for (size_t j = 0; j < pdfium::size(pts[0]); ++j) {
       pts[i][j].x = pts[i][j].x * fWidth + crBBox.left;
       pts[i][j].y *= pts[i][j].y * fHeight + crBBox.bottom;
     }
@@ -162,8 +164,8 @@ ByteString GetAP_Check(const CFX_FloatRect& crBBox) {
   std::ostringstream csAP;
   csAP << pts[0][0].x << " " << pts[0][0].y << " " << kMoveToOperator << "\n";
 
-  for (size_t i = 0; i < FX_ArraySize(pts); ++i) {
-    size_t nNext = i < FX_ArraySize(pts) - 1 ? i + 1 : 0;
+  for (size_t i = 0; i < pdfium::size(pts); ++i) {
+    size_t nNext = i < pdfium::size(pts) - 1 ? i + 1 : 0;
 
     float px1 = pts[i][1].x - pts[i][0].x;
     float py1 = pts[i][1].y - pts[i][0].y;
@@ -689,10 +691,8 @@ ByteString GenerateIconAppStream(CPDF_IconFit& fit,
   CPWL_Wnd::CreateParams cp;
   cp.dwFlags = PWS_VISIBLE;
 
-  CPWL_Icon icon(cp, nullptr);
+  CPWL_Icon icon(cp, std::make_unique<CPDF_Icon>(pIconStream), &fit);
   icon.Realize();
-  icon.SetIconFit(&fit);
-  icon.SetPDFStream(pIconStream);
   if (!icon.Move(rcIcon, false, false))
     return ByteString();
 
@@ -743,7 +743,7 @@ ByteString GetPushButtonAppStream(const CFX_FloatRect& rcBBox,
                                   ButtonStyle nLayOut) {
   const float fAutoFontScale = 1.0f / 3.0f;
 
-  auto pEdit = pdfium::MakeUnique<CPWL_EditImpl>();
+  auto pEdit = std::make_unique<CPWL_EditImpl>();
   pEdit->SetFontMap(pFontMap);
   pEdit->SetAlignmentH(1, true);
   pEdit->SetAlignmentV(1, true);
@@ -1116,13 +1116,36 @@ void SetDefaultIconName(CPDF_Stream* pIcon, const char* name) {
   pImageDict->SetNewFor<CPDF_String>("Name", name, false);
 }
 
+Optional<CheckStyle> CheckStyleFromCaption(const WideString& caption) {
+  if (caption.IsEmpty())
+    return pdfium::nullopt;
+
+  // Character values are ZapfDingbats encodings of named glyphs.
+  switch (caption[0]) {
+    case L'4':
+      return CheckStyle::kCheck;
+    case L'8':
+      return CheckStyle::kCross;
+    case L'H':
+      return CheckStyle::kStar;
+    case L'l':
+      return CheckStyle::kCircle;
+    case L'n':
+      return CheckStyle::kSquare;
+    case L'u':
+      return CheckStyle::kDiamond;
+    default:
+      return pdfium::nullopt;
+  }
+}
+
 }  // namespace
 
 CPDFSDK_AppStream::CPDFSDK_AppStream(CPDFSDK_Widget* widget,
                                      CPDF_Dictionary* dict)
     : widget_(widget), dict_(dict) {}
 
-CPDFSDK_AppStream::~CPDFSDK_AppStream() {}
+CPDFSDK_AppStream::~CPDFSDK_AppStream() = default;
 
 void CPDFSDK_AppStream::SetAsPushButton() {
   CPDF_FormControl* pControl = widget_->GetFormControl();
@@ -1358,31 +1381,8 @@ void CPDFSDK_AppStream::SetAsCheckBox() {
     crText = CFX_Color(iColorType, fc[0], fc[1], fc[2], fc[3]);
   }
 
-  CheckStyle nStyle = CheckStyle::kCheck;
-  WideString csWCaption = pControl->GetNormalCaption();
-  if (csWCaption.GetLength() > 0) {
-    switch (csWCaption[0]) {
-      case L'l':
-        nStyle = CheckStyle::kCircle;
-        break;
-      case L'8':
-        nStyle = CheckStyle::kCross;
-        break;
-      case L'u':
-        nStyle = CheckStyle::kDiamond;
-        break;
-      case L'n':
-        nStyle = CheckStyle::kSquare;
-        break;
-      case L'H':
-        nStyle = CheckStyle::kStar;
-        break;
-      case L'4':
-      default:
-        nStyle = CheckStyle::kCheck;
-    }
-  }
-
+  CheckStyle nStyle = CheckStyleFromCaption(pControl->GetNormalCaption())
+                          .value_or(CheckStyle::kCheck);
   ByteString csAP_N_ON =
       GetRectFillAppStream(rcWindow, crBackground) +
       GetBorderAppStreamInternal(rcWindow, fBorderWidth, crBorder, crLeftTop,
@@ -1475,30 +1475,8 @@ void CPDFSDK_AppStream::SetAsRadioButton() {
     crText = CFX_Color(iColorType, fc[0], fc[1], fc[2], fc[3]);
   }
 
-  CheckStyle nStyle = CheckStyle::kCircle;
-  WideString csWCaption = pControl->GetNormalCaption();
-  if (csWCaption.GetLength() > 0) {
-    switch (csWCaption[0]) {
-      case L'8':
-        nStyle = CheckStyle::kCross;
-        break;
-      case L'u':
-        nStyle = CheckStyle::kDiamond;
-        break;
-      case L'n':
-        nStyle = CheckStyle::kSquare;
-        break;
-      case L'H':
-        nStyle = CheckStyle::kStar;
-        break;
-      case L'4':
-        nStyle = CheckStyle::kCheck;
-        break;
-      case L'l':
-      default:
-        nStyle = CheckStyle::kCircle;
-    }
-  }
+  CheckStyle nStyle = CheckStyleFromCaption(pControl->GetNormalCaption())
+                          .value_or(CheckStyle::kCircle);
 
   ByteString csAP_N_ON;
   CFX_FloatRect rcCenter = rcWindow.GetCenterSquare().GetDeflated(1.0f, 1.0f);
@@ -1566,8 +1544,9 @@ void CPDFSDK_AppStream::SetAsRadioButton() {
 
   ByteString csAP_D_OFF = csAP_D_ON;
 
-  csAP_N_ON += GetRadioButtonAppStream(rcClient, nStyle, crText);
-  csAP_D_ON += GetRadioButtonAppStream(rcClient, nStyle, crText);
+  ByteString app_stream = GetRadioButtonAppStream(rcClient, nStyle, crText);
+  csAP_N_ON += app_stream;
+  csAP_D_ON += app_stream;
 
   Write("N", csAP_N_ON, pControl->GetCheckedAPState());
   Write("N", csAP_N_OFF, "Off");
@@ -1594,7 +1573,7 @@ void CPDFSDK_AppStream::SetAsComboBox(Optional<WideString> sValue) {
   CBA_FontMap font_map(widget_->GetPDFPage()->GetDocument(),
                        widget_->GetPDFAnnot()->GetAnnotDict());
 
-  auto pEdit = pdfium::MakeUnique<CPWL_EditImpl>();
+  auto pEdit = std::make_unique<CPWL_EditImpl>();
   pEdit->EnableRefresh(false);
   pEdit->SetFontMap(&font_map);
 
@@ -1660,7 +1639,7 @@ void CPDFSDK_AppStream::SetAsListBox() {
   CBA_FontMap font_map(widget_->GetPDFPage()->GetDocument(),
                        widget_->GetPDFAnnot()->GetAnnotDict());
 
-  auto pEdit = pdfium::MakeUnique<CPWL_EditImpl>();
+  auto pEdit = std::make_unique<CPWL_EditImpl>();
   pEdit->EnableRefresh(false);
   pEdit->SetFontMap(&font_map);
   pEdit->SetPlateRect(CFX_FloatRect(rcClient.left, 0.0f, rcClient.right, 0.0f));
@@ -1744,7 +1723,7 @@ void CPDFSDK_AppStream::SetAsTextField(Optional<WideString> sValue) {
   CBA_FontMap font_map(widget_->GetPDFPage()->GetDocument(),
                        widget_->GetPDFAnnot()->GetAnnotDict());
 
-  auto pEdit = pdfium::MakeUnique<CPWL_EditImpl>();
+  auto pEdit = std::make_unique<CPWL_EditImpl>();
   pEdit->EnableRefresh(false);
   pEdit->SetFontMap(&font_map);
 

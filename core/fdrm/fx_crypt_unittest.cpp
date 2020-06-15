@@ -4,12 +4,14 @@
 
 #include "core/fdrm/fx_crypt.h"
 
+#include <algorithm>
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "core/fxcrt/fx_memory.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/utils/hash.h"
+#include "third_party/base/stl_util.h"
 
 namespace {
 
@@ -31,10 +33,11 @@ void CheckArcFourContext(const CRYPT_rc4_context& context,
 
 // Originally from chromium's /src/base/md5_unittest.cc.
 TEST(FXCRYPT, CryptToBase16) {
-  uint8_t data[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04,
-                    0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e};
+  static constexpr uint8_t kData[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00,
+                                      0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98,
+                                      0xec, 0xf8, 0x42, 0x7e};
 
-  std::string actual = CryptToBase16(data);
+  std::string actual = CryptToBase16(kData);
   std::string expected = "d41d8cd98f00b204e9800998ecf8427e";
 
   EXPECT_EQ(expected, actual);
@@ -42,81 +45,75 @@ TEST(FXCRYPT, CryptToBase16) {
 
 TEST(FXCRYPT, MD5GenerateEmtpyData) {
   uint8_t digest[16];
-  const char data[] = "";
-  uint32_t length = static_cast<uint32_t>(strlen(data));
+  CRYPT_MD5Generate({}, digest);
 
-  CRYPT_MD5Generate(reinterpret_cast<const uint8_t*>(data), length, digest);
-
-  uint8_t expected[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04,
-                        0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e};
+  static constexpr uint8_t kExpected[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00,
+                                          0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98,
+                                          0xec, 0xf8, 0x42, 0x7e};
 
   for (int i = 0; i < 16; ++i)
-    EXPECT_EQ(expected[i], digest[i]);
+    EXPECT_EQ(kExpected[i], digest[i]);
 }
 
 TEST(FXCRYPT, MD5GenerateOneByteData) {
   uint8_t digest[16];
-  const char data[] = "a";
-  uint32_t length = static_cast<uint32_t>(strlen(data));
+  CRYPT_MD5Generate(pdfium::as_bytes(pdfium::make_span("a", 1)), digest);
 
-  CRYPT_MD5Generate(reinterpret_cast<const uint8_t*>(data), length, digest);
-
-  uint8_t expected[] = {0x0c, 0xc1, 0x75, 0xb9, 0xc0, 0xf1, 0xb6, 0xa8,
-                        0x31, 0xc3, 0x99, 0xe2, 0x69, 0x77, 0x26, 0x61};
+  static constexpr uint8_t kExpected[] = {0x0c, 0xc1, 0x75, 0xb9, 0xc0, 0xf1,
+                                          0xb6, 0xa8, 0x31, 0xc3, 0x99, 0xe2,
+                                          0x69, 0x77, 0x26, 0x61};
 
   for (int i = 0; i < 16; ++i)
-    EXPECT_EQ(expected[i], digest[i]);
+    EXPECT_EQ(kExpected[i], digest[i]);
 }
 
 TEST(FXCRYPT, MD5GenerateLongData) {
   const uint32_t length = 10 * 1024 * 1024 + 1;
-  std::unique_ptr<char[]> data(new char[length]);
+  std::vector<uint8_t> data(length);
 
   for (uint32_t i = 0; i < length; ++i)
     data[i] = i & 0xFF;
 
   uint8_t digest[16];
-  CRYPT_MD5Generate(reinterpret_cast<const uint8_t*>(data.get()), length,
-                    digest);
+  CRYPT_MD5Generate(data, digest);
 
-  uint8_t expected[] = {0x90, 0xbd, 0x6a, 0xd9, 0x0a, 0xce, 0xf5, 0xad,
-                        0xaa, 0x92, 0x20, 0x3e, 0x21, 0xc7, 0xa1, 0x3e};
+  static constexpr uint8_t kExpected[] = {0x90, 0xbd, 0x6a, 0xd9, 0x0a, 0xce,
+                                          0xf5, 0xad, 0xaa, 0x92, 0x20, 0x3e,
+                                          0x21, 0xc7, 0xa1, 0x3e};
 
   for (int i = 0; i < 16; ++i)
-    EXPECT_EQ(expected[i], digest[i]);
+    EXPECT_EQ(kExpected[i], digest[i]);
 }
 
 TEST(FXCRYPT, ContextWithEmptyData) {
-  CRYPT_md5_context ctx;
-  CRYPT_MD5Start(&ctx);
+  CRYPT_md5_context ctx = CRYPT_MD5Start();
 
   uint8_t digest[16];
   CRYPT_MD5Finish(&ctx, digest);
 
-  uint8_t expected[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00, 0xb2, 0x04,
-                        0xe9, 0x80, 0x09, 0x98, 0xec, 0xf8, 0x42, 0x7e};
+  static constexpr uint8_t kExpected[] = {0xd4, 0x1d, 0x8c, 0xd9, 0x8f, 0x00,
+                                          0xb2, 0x04, 0xe9, 0x80, 0x09, 0x98,
+                                          0xec, 0xf8, 0x42, 0x7e};
 
   for (int i = 0; i < 16; ++i)
-    EXPECT_EQ(expected[i], digest[i]);
+    EXPECT_EQ(kExpected[i], digest[i]);
 }
 
 TEST(FXCRYPT, ContextWithLongData) {
-  CRYPT_md5_context ctx;
-  CRYPT_MD5Start(&ctx);
+  CRYPT_md5_context ctx = CRYPT_MD5Start();
 
   const uint32_t length = 10 * 1024 * 1024 + 1;
-  std::unique_ptr<uint8_t[]> data(new uint8_t[length]);
+  std::vector<uint8_t> data(length);
 
   for (uint32_t i = 0; i < length; ++i)
     data[i] = i & 0xFF;
 
+  pdfium::span<const uint8_t> data_span = pdfium::make_span(data);
   uint32_t total = 0;
   while (total < length) {
-    uint32_t len = 4097;  // intentionally not 2^k.
-    if (len > length - total)
-      len = length - total;
-
-    CRYPT_MD5Update(&ctx, data.get() + total, len);
+    constexpr uint32_t kChunkLen = 4097;  // intentionally not 2^k.
+    uint32_t len = std::min(kChunkLen, length - total);
+    CRYPT_MD5Update(&ctx, data_span.subspan(total, len));
     total += len;
   }
 
@@ -125,11 +122,12 @@ TEST(FXCRYPT, ContextWithLongData) {
   uint8_t digest[16];
   CRYPT_MD5Finish(&ctx, digest);
 
-  uint8_t expected[] = {0x90, 0xbd, 0x6a, 0xd9, 0x0a, 0xce, 0xf5, 0xad,
-                        0xaa, 0x92, 0x20, 0x3e, 0x21, 0xc7, 0xa1, 0x3e};
+  static constexpr uint8_t kExpected[] = {0x90, 0xbd, 0x6a, 0xd9, 0x0a, 0xce,
+                                          0xf5, 0xad, 0xaa, 0x92, 0x20, 0x3e,
+                                          0x21, 0xc7, 0xa1, 0x3e};
 
   for (int i = 0; i < 16; ++i)
-    EXPECT_EQ(expected[i], digest[i]);
+    EXPECT_EQ(kExpected[i], digest[i]);
 }
 
 // Example data from http://www.ietf.org/rfc/rfc1321.txt A.5 Test Suite
@@ -183,9 +181,8 @@ TEST(FXCRYPT, MD5StringTestSuite7) {
 }
 
 TEST(FXCRYPT, ContextWithStringData) {
-  CRYPT_md5_context ctx;
-  CRYPT_MD5Start(&ctx);
-  CRYPT_MD5Update(&ctx, reinterpret_cast<const uint8_t*>("abc"), 3);
+  CRYPT_md5_context ctx = CRYPT_MD5Start();
+  CRYPT_MD5Update(&ctx, pdfium::as_bytes(pdfium::make_span("abc", 3)));
 
   uint8_t digest[16];
   CRYPT_MD5Finish(&ctx, digest);
@@ -204,7 +201,7 @@ TEST(FXCRYPT, Sha1Empty) {
   CRYPT_SHA1Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                      actual);
 
-  for (size_t i = 0; i < FX_ArraySize(kExpected); i++)
+  for (size_t i = 0; i < pdfium::size(kExpected); i++)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -219,7 +216,7 @@ TEST(FXCRYPT, Sha1TestA1) {
   CRYPT_SHA1Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                      actual);
 
-  for (size_t i = 0; i < FX_ArraySize(kExpected); i++)
+  for (size_t i = 0; i < pdfium::size(kExpected); i++)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -235,7 +232,7 @@ TEST(FXCRYPT, Sha1TestA2) {
   CRYPT_SHA1Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                      actual);
 
-  for (size_t i = 0; i < FX_ArraySize(kExpected); i++)
+  for (size_t i = 0; i < pdfium::size(kExpected); i++)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -248,7 +245,7 @@ TEST(FXCRYPT, Sha256Empty) {
   uint8_t actual[32];
   CRYPT_SHA256Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -262,7 +259,7 @@ TEST(FXCRYPT, Sha256TestB1) {
   uint8_t actual[32];
   CRYPT_SHA256Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -277,7 +274,7 @@ TEST(FXCRYPT, Sha256TestB2) {
   uint8_t actual[32];
   CRYPT_SHA256Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -304,7 +301,7 @@ TEST(FXCRYPT, CRYPT_ArcFourSetup) {
         139, 24,  209, 251, 208, 28,  111, 89,  158, 155, 243, 107, 233, 169,
         117, 184, 31,  39};
     CRYPT_rc4_context context;
-    CRYPT_ArcFourSetup(&context, nullptr, 0);
+    CRYPT_ArcFourSetup(&context, {});
     CheckArcFourContext(context, 0, 0, kNullPermutation);
   }
   {
@@ -330,7 +327,7 @@ TEST(FXCRYPT, CRYPT_ArcFourSetup) {
         29,  45,  14,  111};
     CRYPT_rc4_context context;
     static const uint8_t kFooBar[] = "foobar";
-    CRYPT_ArcFourSetup(&context, kFooBar, FX_ArraySize(kFooBar) - 1);
+    CRYPT_ArcFourSetup(&context, {kFooBar, pdfium::size(kFooBar) - 1});
     CheckArcFourContext(context, 0, 0, kFoobarPermutation);
   }
 }
@@ -346,20 +343,20 @@ TEST(FXCRYPT, CRYPT_ArcFourCrypt) {
       "!@#$%^&*()[]{};':\",.<>/?\\|\r\t\n";
   {
     CRYPT_rc4_context context;
-    CRYPT_ArcFourSetup(&context, nullptr, 0);
+    CRYPT_ArcFourSetup(&context, {});
 
-    uint8_t data_short[FX_ArraySize(kDataShort)];
-    memcpy(data_short, kDataShort, FX_ArraySize(kDataShort));
+    uint8_t data_short[pdfium::size(kDataShort)];
+    memcpy(data_short, kDataShort, pdfium::size(kDataShort));
     static const uint8_t kExpectedEncryptedDataShort[] = {
         138, 112, 236, 97,  242, 66,  52,  89,  225, 38,  88,  8,
         47,  78,  216, 24,  170, 106, 26,  199, 208, 131, 157, 242,
         55,  11,  25,  90,  66,  182, 19,  255, 210, 181, 85,  69,
         31,  240, 206, 171, 97,  62,  202, 172, 30,  252};
     static_assert(
-        FX_ArraySize(kExpectedEncryptedDataShort) == FX_ArraySize(data_short),
+        pdfium::size(kExpectedEncryptedDataShort) == pdfium::size(data_short),
         "data_short mismatch");
-    CRYPT_ArcFourCrypt(&context, data_short, FX_ArraySize(data_short));
-    for (size_t i = 0; i < FX_ArraySize(data_short); ++i)
+    CRYPT_ArcFourCrypt(&context, data_short);
+    for (size_t i = 0; i < pdfium::size(data_short); ++i)
       EXPECT_EQ(kExpectedEncryptedDataShort[i], data_short[i]) << i;
 
     static const uint8_t kPermutation[kRC4ContextPermutationLength] = {
@@ -386,10 +383,10 @@ TEST(FXCRYPT, CRYPT_ArcFourCrypt) {
   }
   {
     CRYPT_rc4_context context;
-    CRYPT_ArcFourSetup(&context, nullptr, 0);
+    CRYPT_ArcFourSetup(&context, {});
 
-    uint8_t data_long[FX_ArraySize(kDataLong)];
-    memcpy(data_long, kDataLong, FX_ArraySize(kDataLong));
+    uint8_t data_long[pdfium::size(kDataLong)];
+    memcpy(data_long, kDataLong, pdfium::size(kDataLong));
     static const uint8_t kExpectedEncryptedDataLong[] = {
         138, 112, 236, 97,  242, 66,  52,  89,  225, 38,  88,  8,   47,  78,
         216, 24,  170, 106, 26,  199, 208, 131, 157, 242, 55,  11,  25,  90,
@@ -412,11 +409,11 @@ TEST(FXCRYPT, CRYPT_ArcFourCrypt) {
         202, 170, 224, 89,  28,  5,   138, 19,  253, 105, 220, 105, 24,  187,
         109, 89,  205, 89,  202};
     static_assert(
-        FX_ArraySize(kExpectedEncryptedDataLong) == FX_ArraySize(data_long),
+        pdfium::size(kExpectedEncryptedDataLong) == pdfium::size(data_long),
         "data_long mismatch");
-    static_assert(FX_ArraySize(data_long) > 256, "too short");
-    CRYPT_ArcFourCrypt(&context, data_long, FX_ArraySize(data_long));
-    for (size_t i = 0; i < FX_ArraySize(data_long); ++i)
+    static_assert(pdfium::size(data_long) > 256, "too short");
+    CRYPT_ArcFourCrypt(&context, data_long);
+    for (size_t i = 0; i < pdfium::size(data_long); ++i)
       EXPECT_EQ(kExpectedEncryptedDataLong[i], data_long[i]) << i;
 
     static const uint8_t kPermutation[kRC4ContextPermutationLength] = {
@@ -444,20 +441,20 @@ TEST(FXCRYPT, CRYPT_ArcFourCrypt) {
   {
     CRYPT_rc4_context context;
     static const uint8_t kFooBar[] = "foobar";
-    CRYPT_ArcFourSetup(&context, kFooBar, FX_ArraySize(kFooBar) - 1);
+    CRYPT_ArcFourSetup(&context, {kFooBar, pdfium::size(kFooBar) - 1});
 
-    uint8_t data_short[FX_ArraySize(kDataShort)];
-    memcpy(data_short, kDataShort, FX_ArraySize(kDataShort));
+    uint8_t data_short[pdfium::size(kDataShort)];
+    memcpy(data_short, kDataShort, pdfium::size(kDataShort));
     static const uint8_t kExpectedEncryptedDataShort[] = {
         59,  193, 117, 206, 167, 54,  218, 7,   229, 214, 188, 55,
         90,  205, 196, 25,  36,  114, 199, 218, 161, 107, 122, 119,
         106, 167, 44,  175, 240, 123, 192, 102, 174, 167, 105, 187,
         202, 70,  121, 81,  17,  30,  5,   138, 116, 166};
     static_assert(
-        FX_ArraySize(kExpectedEncryptedDataShort) == FX_ArraySize(data_short),
+        pdfium::size(kExpectedEncryptedDataShort) == pdfium::size(data_short),
         "data_short mismatch");
-    CRYPT_ArcFourCrypt(&context, data_short, FX_ArraySize(data_short));
-    for (size_t i = 0; i < FX_ArraySize(data_short); ++i)
+    CRYPT_ArcFourCrypt(&context, data_short);
+    for (size_t i = 0; i < pdfium::size(data_short); ++i)
       EXPECT_EQ(kExpectedEncryptedDataShort[i], data_short[i]) << i;
 
     static const uint8_t kPermutation[kRC4ContextPermutationLength] = {
@@ -485,10 +482,10 @@ TEST(FXCRYPT, CRYPT_ArcFourCrypt) {
   {
     CRYPT_rc4_context context;
     static const uint8_t kFooBar[] = "foobar";
-    CRYPT_ArcFourSetup(&context, kFooBar, FX_ArraySize(kFooBar) - 1);
+    CRYPT_ArcFourSetup(&context, {kFooBar, pdfium::size(kFooBar) - 1});
 
-    uint8_t data_long[FX_ArraySize(kDataLong)];
-    memcpy(data_long, kDataLong, FX_ArraySize(kDataLong));
+    uint8_t data_long[pdfium::size(kDataLong)];
+    memcpy(data_long, kDataLong, pdfium::size(kDataLong));
     static const uint8_t kExpectedEncryptedDataLong[] = {
         59,  193, 117, 206, 167, 54,  218, 7,   229, 214, 188, 55,  90,  205,
         196, 25,  36,  114, 199, 218, 161, 107, 122, 119, 106, 167, 44,  175,
@@ -511,11 +508,11 @@ TEST(FXCRYPT, CRYPT_ArcFourCrypt) {
         243, 73,  206, 89,  9,   93,  156, 167, 205, 166, 75,  227, 36,  34,
         81,  124, 195, 246, 152};
     static_assert(
-        FX_ArraySize(kExpectedEncryptedDataLong) == FX_ArraySize(data_long),
+        pdfium::size(kExpectedEncryptedDataLong) == pdfium::size(data_long),
         "data_long mismatch");
-    static_assert(FX_ArraySize(data_long) > 256, "too short");
-    CRYPT_ArcFourCrypt(&context, data_long, FX_ArraySize(data_long));
-    for (size_t i = 0; i < FX_ArraySize(data_long); ++i)
+    static_assert(pdfium::size(data_long) > 256, "too short");
+    CRYPT_ArcFourCrypt(&context, data_long);
+    for (size_t i = 0; i < pdfium::size(data_long); ++i)
       EXPECT_EQ(kExpectedEncryptedDataLong[i], data_long[i]) << i;
 
     static const uint8_t kPermutation[kRC4ContextPermutationLength] = {
@@ -552,7 +549,7 @@ TEST(FXCRYPT, Sha384Empty) {
   uint8_t actual[48];
   CRYPT_SHA384Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -568,7 +565,7 @@ TEST(FXCRYPT, Sha384Test) {
   uint8_t actual[48];
   CRYPT_SHA384Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -586,7 +583,7 @@ TEST(FXCRYPT, Sha384Pad112) {
   EXPECT_EQ(112u, strlen(kInput));
   CRYPT_SHA384Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -602,7 +599,7 @@ TEST(FXCRYPT, Sha512Empty) {
   uint8_t actual[64];
   CRYPT_SHA512Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -620,7 +617,7 @@ TEST(FXCRYPT, Sha512Test) {
   uint8_t actual[64];
   CRYPT_SHA512Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }
 
@@ -640,6 +637,6 @@ TEST(FXCRYPT, Sha512Pad112) {
   EXPECT_EQ(112u, strlen(kInput));
   CRYPT_SHA512Generate(reinterpret_cast<const uint8_t*>(kInput), strlen(kInput),
                        actual);
-  for (size_t i = 0; i < FX_ArraySize(kExpected); ++i)
+  for (size_t i = 0; i < pdfium::size(kExpected); ++i)
     EXPECT_EQ(kExpected[i], actual[i]) << " at byte " << i;
 }

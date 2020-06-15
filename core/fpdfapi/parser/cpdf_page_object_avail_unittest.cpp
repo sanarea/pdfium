@@ -17,7 +17,6 @@
 #include "core/fxcrt/fx_stream.h"
 #include "testing/gtest/include/gtest/gtest.h"
 #include "testing/invalid_seekable_read_stream.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -103,7 +102,7 @@ TEST(CPDF_PageObjectAvailTest, ExcludePages) {
                                                                 2);
   holder.AddObject(2, pdfium::MakeRetain<CPDF_Array>(),
                    TestHolder::ObjectState::Available);
-  holder.GetTestObject(2)->AsArray()->AddNew<CPDF_Reference>(&holder, 3);
+  holder.GetTestObject(2)->AsArray()->AppendNew<CPDF_Reference>(&holder, 3);
 
   holder.AddObject(3, pdfium::MakeRetain<CPDF_Dictionary>(),
                    TestHolder::ObjectState::Available);

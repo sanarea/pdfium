@@ -14,7 +14,6 @@
 #include "core/fxcrt/unowned_ptr.h"
 #include "third_party/base/optional.h"
 
-class CFXJSE_Value;
 class CJS_Runtime;
 class CPDFSDK_FormFillEnvironment;
 class IJS_EventContext;
@@ -45,7 +44,7 @@ class IJS_Runtime {
     UnownedPtr<IJS_EventContext> m_pContext;
   };
 
-  static void Initialize(unsigned int slot, void* isolate);
+  static void Initialize(unsigned int slot, void* isolate, void* platform);
   static void Destroy();
   static std::unique_ptr<IJS_Runtime> Create(
       CPDFSDK_FormFillEnvironment* pFormFillEnv);

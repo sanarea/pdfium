@@ -4,7 +4,6 @@
 
 #include <memory>
 #include <set>
-#include <string>
 #include <vector>
 
 #include "core/fpdfapi/parser/cpdf_document.h"
@@ -152,6 +151,44 @@ TEST_F(FPDFDocEmbedderTest, DestGetLocationInPage) {
   EXPECT_EQ(0, x);
   EXPECT_EQ(0, y);
   EXPECT_EQ(1, zoom);
+}
+
+TEST_F(FPDFDocEmbedderTest, BUG_1506_1) {
+  ASSERT_TRUE(OpenDocument("bug_1506.pdf"));
+
+  FPDF_DEST dest = FPDF_GetNamedDestByName(document(), "First");
+  ASSERT_TRUE(dest);
+  EXPECT_EQ(3, FPDFDest_GetDestPageIndex(document(), dest));
+}
+
+TEST_F(FPDFDocEmbedderTest, BUG_1506_2) {
+  ASSERT_TRUE(OpenDocument("bug_1506.pdf"));
+
+  std::vector<FPDF_PAGE> pages;
+  for (int i : {0, 2})
+    pages.push_back(LoadPage(i));
+
+  FPDF_DEST dest = FPDF_GetNamedDestByName(document(), "First");
+  ASSERT_TRUE(dest);
+  EXPECT_EQ(3, FPDFDest_GetDestPageIndex(document(), dest));
+
+  for (FPDF_PAGE page : pages)
+    UnloadPage(page);
+}
+
+TEST_F(FPDFDocEmbedderTest, BUG_1506_3) {
+  ASSERT_TRUE(OpenDocument("bug_1506.pdf"));
+
+  std::vector<FPDF_PAGE> pages;
+  for (int i : {0, 1, 3})
+    pages.push_back(LoadPage(i));
+
+  FPDF_DEST dest = FPDF_GetNamedDestByName(document(), "First");
+  ASSERT_TRUE(dest);
+  EXPECT_EQ(3, FPDFDest_GetDestPageIndex(document(), dest));
+
+  for (FPDF_PAGE page : pages)
+    UnloadPage(page);
 }
 
 TEST_F(FPDFDocEmbedderTest, BUG_680376) {
@@ -349,14 +386,13 @@ TEST_F(FPDFDocEmbedderTest, ActionNonesuch) {
 }
 
 TEST_F(FPDFDocEmbedderTest, NoBookmarks) {
+  unsigned short buf[128];
+
   // Open a file with no bookmarks.
   EXPECT_TRUE(OpenDocument("named_dests.pdf"));
 
-  // The non-existent top-level bookmark has no title.
-  unsigned short buf[128];
-  EXPECT_EQ(0u, FPDFBookmark_GetTitle(nullptr, buf, sizeof(buf)));
-
   // NULL argument cases.
+  EXPECT_EQ(0u, FPDFBookmark_GetTitle(nullptr, buf, sizeof(buf)));
   EXPECT_EQ(nullptr, FPDFBookmark_GetFirstChild(nullptr, nullptr));
   EXPECT_EQ(nullptr, FPDFBookmark_GetFirstChild(document(), nullptr));
   EXPECT_EQ(nullptr, FPDFBookmark_GetNextSibling(nullptr, nullptr));
@@ -369,19 +405,24 @@ TEST_F(FPDFDocEmbedderTest, NoBookmarks) {
 }
 
 TEST_F(FPDFDocEmbedderTest, Bookmarks) {
+  unsigned short buf[128];
+
   // Open a file with two bookmarks.
   EXPECT_TRUE(OpenDocument("bookmarks.pdf"));
-
-  // The existent top-level bookmark has no title.
-  unsigned short buf[128];
-  EXPECT_EQ(0u, FPDFBookmark_GetTitle(nullptr, buf, sizeof(buf)));
 
   FPDF_BOOKMARK child = FPDFBookmark_GetFirstChild(document(), nullptr);
   EXPECT_TRUE(child);
   EXPECT_EQ(34u, FPDFBookmark_GetTitle(child, buf, sizeof(buf)));
   EXPECT_EQ(WideString(L"A Good Beginning"), WideString::FromUTF16LE(buf, 16));
 
-  EXPECT_EQ(nullptr, FPDFBookmark_GetFirstChild(document(), child));
+  FPDF_DEST dest = FPDFBookmark_GetDest(document(), child);
+  EXPECT_FALSE(dest);  // TODO(tsepez): put real dest into bookmarks.pdf
+
+  FPDF_ACTION action = FPDFBookmark_GetAction(child);
+  EXPECT_FALSE(action);  // TODO(tsepez): put real action into bookmarks.pdf
+
+  FPDF_BOOKMARK grand_child = FPDFBookmark_GetFirstChild(document(), child);
+  EXPECT_FALSE(grand_child);
 
   FPDF_BOOKMARK sibling = FPDFBookmark_GetNextSibling(document(), child);
   EXPECT_TRUE(sibling);
@@ -392,6 +433,8 @@ TEST_F(FPDFDocEmbedderTest, Bookmarks) {
 }
 
 TEST_F(FPDFDocEmbedderTest, FindBookmarks) {
+  unsigned short buf[128];
+
   // Open a file with two bookmarks.
   EXPECT_TRUE(OpenDocument("bookmarks.pdf"));
 
@@ -401,7 +444,6 @@ TEST_F(FPDFDocEmbedderTest, FindBookmarks) {
   EXPECT_TRUE(child);
 
   // Check that the string matches.
-  unsigned short buf[128];
   EXPECT_EQ(34u, FPDFBookmark_GetTitle(child, buf, sizeof(buf)));
   EXPECT_EQ(WideString(L"A Good Beginning"), WideString::FromUTF16LE(buf, 16));
 
@@ -437,6 +479,57 @@ TEST_F(FPDFDocEmbedderTest, DeletePage) {
 
   FPDFPage_Delete(document(), 0);
   EXPECT_EQ(0, FPDF_GetPageCount(document()));
+}
+
+TEST_F(FPDFDocEmbedderTest, GetFileIdentifier) {
+  ASSERT_TRUE(OpenDocument("split_streams.pdf"));
+  constexpr size_t kMd5Length = 17;
+  char buf[kMd5Length];
+  EXPECT_EQ(0u,
+            FPDF_GetFileIdentifier(document(), static_cast<FPDF_FILEIDTYPE>(-1),
+                                   buf, sizeof(buf)));
+  EXPECT_EQ(0u,
+            FPDF_GetFileIdentifier(document(), static_cast<FPDF_FILEIDTYPE>(2),
+                                   buf, sizeof(buf)));
+  EXPECT_EQ(0u, FPDF_GetFileIdentifier(nullptr, FILEIDTYPE_PERMANENT, buf,
+                                       sizeof(buf)));
+  EXPECT_EQ(kMd5Length, FPDF_GetFileIdentifier(document(), FILEIDTYPE_PERMANENT,
+                                               nullptr, 0));
+
+  constexpr char kExpectedPermanent[] =
+      "\xF3\x41\xAE\x65\x4A\x77\xAC\xD5\x06\x5A\x76\x45\xE5\x96\xE6\xE6";
+  ASSERT_EQ(kMd5Length, FPDF_GetFileIdentifier(document(), FILEIDTYPE_PERMANENT,
+                                               buf, sizeof(buf)));
+  EXPECT_EQ(kExpectedPermanent, ByteString(buf));
+
+  constexpr char kExpectedChanging[] =
+      "\xBC\x37\x29\x8A\x3F\x87\xF4\x79\x22\x9B\xCE\x99\x7C\xA7\x91\xF7";
+  ASSERT_EQ(kMd5Length, FPDF_GetFileIdentifier(document(), FILEIDTYPE_CHANGING,
+                                               buf, sizeof(buf)));
+  EXPECT_EQ(kExpectedChanging, ByteString(buf));
+}
+
+TEST_F(FPDFDocEmbedderTest, GetNonHexFileIdentifier) {
+  ASSERT_TRUE(OpenDocument("non_hex_file_id.pdf"));
+  char buf[18];
+
+  constexpr char kPermanentNonHex[] = "permanent non-hex";
+  ASSERT_EQ(18u, FPDF_GetFileIdentifier(document(), FILEIDTYPE_PERMANENT, buf,
+                                        sizeof(buf)));
+  EXPECT_EQ(kPermanentNonHex, ByteString(buf));
+
+  constexpr char kChangingNonHex[] = "changing non-hex";
+  ASSERT_EQ(17u, FPDF_GetFileIdentifier(document(), FILEIDTYPE_CHANGING, buf,
+                                        sizeof(buf)));
+  EXPECT_EQ(kChangingNonHex, ByteString(buf));
+}
+
+TEST_F(FPDFDocEmbedderTest, GetNonexistentFileIdentifier) {
+  ASSERT_TRUE(OpenDocument("hello_world.pdf"));
+  EXPECT_EQ(
+      0u, FPDF_GetFileIdentifier(document(), FILEIDTYPE_PERMANENT, nullptr, 0));
+  EXPECT_EQ(
+      0u, FPDF_GetFileIdentifier(document(), FILEIDTYPE_CHANGING, nullptr, 0));
 }
 
 TEST_F(FPDFDocEmbedderTest, GetMetaText) {

@@ -39,6 +39,8 @@ source_set("fpdfsdk") {
     "cpdfsdk_pageview.h",
     "cpdfsdk_pauseadapter.cpp",
     "cpdfsdk_pauseadapter.h",
+    "cpdfsdk_renderpage.cpp",
+    "cpdfsdk_renderpage.h",
     "cpdfsdk_widget.cpp",
     "cpdfsdk_widget.h",
     "cpdfsdk_widgethandler.cpp",
@@ -106,11 +108,11 @@ source_set("fpdfsdk") {
 
 pdfium_unittest_source_set("unittests") {
   sources = [
-    "fpdf_annot_unittest.cpp",
+    "cpdfsdk_helpers_unittest.cpp",
     "fpdf_catalog_unittest.cpp",
     "fpdf_doc_unittest.cpp",
     "fpdf_edit_unittest.cpp",
-    "fpdf_editimg_unittest.cpp",
+    "fpdf_view_unittest.cpp",
   ]
   deps = [
     ":fpdfsdk",
@@ -127,11 +129,13 @@ pdfium_unittest_source_set("unittests") {
 pdfium_embeddertest_source_set("embeddertests") {
   sources = [
     "cpdfsdk_annotiterator_embeddertest.cpp",
+    "cpdfsdk_baannothandler_embeddertest.cpp",
     "fpdf_annot_embeddertest.cpp",
     "fpdf_attachment_embeddertest.cpp",
     "fpdf_dataavail_embeddertest.cpp",
     "fpdf_doc_embeddertest.cpp",
     "fpdf_edit_embeddertest.cpp",
+    "fpdf_editimg_embeddertest.cpp",
     "fpdf_editpage_embeddertest.cpp",
     "fpdf_editpath_embeddertest.cpp",
     "fpdf_ext_embeddertest.cpp",

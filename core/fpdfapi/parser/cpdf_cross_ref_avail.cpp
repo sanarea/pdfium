@@ -6,7 +6,6 @@
 
 #include <algorithm>
 #include <memory>
-#include <vector>
 
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_name.h"
@@ -34,7 +33,7 @@ CPDF_CrossRefAvail::CPDF_CrossRefAvail(CPDF_SyntaxParser* parser,
   AddCrossRefForCheck(last_crossref_offset);
 }
 
-CPDF_CrossRefAvail::~CPDF_CrossRefAvail() {}
+CPDF_CrossRefAvail::~CPDF_CrossRefAvail() = default;
 
 CPDF_DataAvail::DocAvailStatus CPDF_CrossRefAvail::CheckAvail() {
   if (current_status_ == CPDF_DataAvail::DataAvailable)
@@ -207,6 +206,6 @@ void CPDF_CrossRefAvail::AddCrossRefForCheck(FX_FILESIZE crossref_offset) {
   registered_crossrefs_.insert(crossref_offset);
 }
 
-fxcrt::RetainPtr<CPDF_ReadValidator> CPDF_CrossRefAvail::GetValidator() {
+RetainPtr<CPDF_ReadValidator> CPDF_CrossRefAvail::GetValidator() {
   return parser_->GetValidator();
 }

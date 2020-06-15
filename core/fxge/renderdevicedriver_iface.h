@@ -26,8 +26,7 @@ class PauseIndicatorIface;
 class TextCharPos;
 struct FX_RECT;
 
-enum class DeviceType : uint8_t {
-  kUnknown,
+enum class DeviceType : bool {
   kDisplay,
   kPrinter,
 };
@@ -44,6 +43,7 @@ class RenderDeviceDriverIface {
   virtual void SaveState() = 0;
   virtual void RestoreState(bool bKeepSaved) = 0;
 
+  virtual void SetBaseClip(const FX_RECT& rect);
   virtual bool SetClip_PathFill(const CFX_PathData* pPathData,
                                 const CFX_Matrix* pObject2Device,
                                 int fill_mode) = 0;

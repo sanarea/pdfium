@@ -22,6 +22,7 @@
 
 #include "fxbarcode/oned/BC_OnedUPCAWriter.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "core/fxcrt/fx_extension.h"
@@ -30,21 +31,18 @@
 #include "fxbarcode/BC_Writer.h"
 #include "fxbarcode/oned/BC_OneDimWriter.h"
 #include "fxbarcode/oned/BC_OnedEAN13Writer.h"
-#include "third_party/base/ptr_util.h"
 
 CBC_OnedUPCAWriter::CBC_OnedUPCAWriter() {
   m_bLeftPadding = true;
   m_bRightPadding = true;
 }
 
-CBC_OnedUPCAWriter::~CBC_OnedUPCAWriter() {}
+CBC_OnedUPCAWriter::~CBC_OnedUPCAWriter() = default;
 
 bool CBC_OnedUPCAWriter::CheckContentValidity(WideStringView contents) {
-  for (size_t i = 0; i < contents.GetLength(); ++i) {
-    if (contents[i] < '0' || contents[i] > '9')
-      return false;
-  }
-  return true;
+  return HasValidContentSize(contents) &&
+         std::all_of(contents.begin(), contents.end(),
+                     [](wchar_t c) { return FXSYS_IsDecimalDigit(c); });
 }
 
 WideString CBC_OnedUPCAWriter::FilterContents(WideStringView contents) {
@@ -64,7 +62,7 @@ WideString CBC_OnedUPCAWriter::FilterContents(WideStringView contents) {
 }
 
 void CBC_OnedUPCAWriter::InitEANWriter() {
-  m_subWriter = pdfium::MakeUnique<CBC_OnedEAN13Writer>();
+  m_subWriter = std::make_unique<CBC_OnedEAN13Writer>();
 }
 
 int32_t CBC_OnedUPCAWriter::CalcChecksum(const ByteString& contents) {
@@ -116,7 +114,7 @@ bool CBC_OnedUPCAWriter::ShowChars(WideStringView contents,
   ByteString str = FX_UTF8Encode(contents);
   size_t length = str.GetLength();
   std::vector<TextCharPos> charpos(length);
-  ByteString tempStr = str.Mid(1, 5);
+  ByteString tempStr = str.Substr(1, 5);
   float strWidth = (float)35 * multiple;
   float blank = 0.0;
 
@@ -164,9 +162,9 @@ bool CBC_OnedUPCAWriter::ShowChars(WideStringView contents,
       affine_matrix1.Concat(*matrix);
     device->DrawNormalText(length, &charpos[1], m_pFont.Get(),
                            static_cast<float>(iFontSize), affine_matrix1,
-                           m_fontColor, FXTEXT_CLEARTYPE);
+                           m_fontColor, GetTextRenderOptions());
   }
-  tempStr = str.Mid(6, 5);
+  tempStr = str.Substr(6, 5);
   length = tempStr.GetLength();
   CalcTextInfo(tempStr, &charpos[6], m_pFont.Get(), strWidth, iFontSize, blank);
   {
@@ -178,9 +176,9 @@ bool CBC_OnedUPCAWriter::ShowChars(WideStringView contents,
       affine_matrix1.Concat(*matrix);
     device->DrawNormalText(length, &charpos[6], m_pFont.Get(),
                            static_cast<float>(iFontSize), affine_matrix1,
-                           m_fontColor, FXTEXT_CLEARTYPE);
+                           m_fontColor, GetTextRenderOptions());
   }
-  tempStr = str.Left(1);
+  tempStr = str.First(1);
   length = tempStr.GetLength();
   strWidth = (float)multiple * 7;
   strWidth = strWidth * m_outputHScale;
@@ -194,9 +192,9 @@ bool CBC_OnedUPCAWriter::ShowChars(WideStringView contents,
       affine_matrix1.Concat(*matrix);
     device->DrawNormalText(length, charpos.data(), m_pFont.Get(),
                            static_cast<float>(iFontSize), affine_matrix1,
-                           m_fontColor, FXTEXT_CLEARTYPE);
+                           m_fontColor, GetTextRenderOptions());
   }
-  tempStr = str.Mid(11, 1);
+  tempStr = str.Substr(11, 1);
   length = tempStr.GetLength();
   CalcTextInfo(tempStr, &charpos[11], m_pFont.Get(), strWidth, iFontSize,
                blank);
@@ -209,7 +207,7 @@ bool CBC_OnedUPCAWriter::ShowChars(WideStringView contents,
       affine_matrix1.Concat(*matrix);
     device->DrawNormalText(length, &charpos[11], m_pFont.Get(),
                            static_cast<float>(iFontSize), affine_matrix1,
-                           m_fontColor, FXTEXT_CLEARTYPE);
+                           m_fontColor, GetTextRenderOptions());
   }
   return true;
 }

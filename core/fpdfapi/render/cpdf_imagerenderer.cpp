@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <memory>
 
-#include "core/fpdfapi/page/cpdf_dibbase.h"
+#include "core/fpdfapi/page/cpdf_dib.h"
 #include "core/fpdfapi/page/cpdf_docpagedata.h"
 #include "core/fpdfapi/page/cpdf_image.h"
 #include "core/fpdfapi/page/cpdf_imageobject.h"
@@ -34,7 +34,6 @@
 #include "core/fxge/dib/cfx_dibitmap.h"
 #include "core/fxge/dib/cfx_imagestretcher.h"
 #include "core/fxge/dib/cfx_imagetransformer.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 
 #ifdef _SKIA_SUPPORT_
@@ -62,14 +61,11 @@ bool CPDF_ImageRenderer::StartLoadDIBBase() {
   if (!GetUnitRect().has_value())
     return false;
 
-  if (m_Loader.Start(m_pImageObject.Get(),
-                     m_pRenderStatus->GetContext()->GetPageCache(), m_bStdCS,
-                     m_pRenderStatus->GetGroupFamily(),
-                     m_pRenderStatus->GetLoadMask(), m_pRenderStatus.Get())) {
-    m_Mode = Mode::kDefault;
-    return true;
-  }
-  return false;
+  if (!m_Loader.Start(m_pImageObject.Get(), m_pRenderStatus.Get(), m_bStdCS))
+    return false;
+
+  m_Mode = Mode::kDefault;
+  return true;
 }
 
 bool CPDF_ImageRenderer::StartRenderDIBBase() {
@@ -110,9 +106,7 @@ bool CPDF_ImageRenderer::StartRenderDIBBase() {
     m_pDIBBase = pClone;
   }
   m_ResampleOptions = FXDIB_ResampleOptions();
-  if (GetRenderOptions().GetOptions().bForceDownsample)
-    m_ResampleOptions.bInterpolateDownsample = true;
-  else if (GetRenderOptions().GetOptions().bForceHalftone)
+  if (GetRenderOptions().GetOptions().bForceHalftone)
     m_ResampleOptions.bHalftone = true;
 
   if (m_pRenderStatus->GetRenderDevice()->GetDeviceType() !=
@@ -377,7 +371,7 @@ bool CPDF_ImageRenderer::DrawMaskedImage() {
 }
 
 bool CPDF_ImageRenderer::StartDIBBase() {
-  if (!m_ResampleOptions.bInterpolateDownsample && m_pDIBBase->GetBPP() > 1) {
+  if (m_pDIBBase->GetBPP() > 1) {
     FX_SAFE_SIZE_T image_size = m_pDIBBase->GetBPP();
     image_size /= 8;
     image_size *= m_pDIBBase->GetWidth();
@@ -385,7 +379,7 @@ bool CPDF_ImageRenderer::StartDIBBase() {
     if (!image_size.IsValid())
       return false;
 
-    if (image_size.ValueOrDie() > FPDF_HUGE_IMAGE_SIZE &&
+    if (image_size.ValueOrDie() > kHugeImageSize &&
         !m_ResampleOptions.bHalftone) {
       m_ResampleOptions.bInterpolateBilinear = true;
     }
@@ -429,7 +423,7 @@ bool CPDF_ImageRenderer::StartDIBBase() {
     FX_RECT clip_box = m_pRenderStatus->GetRenderDevice()->GetClipBox();
     clip_box.Intersect(image_rect.value());
     m_Mode = Mode::kTransform;
-    m_pTransformer = pdfium::MakeUnique<CFX_ImageTransformer>(
+    m_pTransformer = std::make_unique<CFX_ImageTransformer>(
         m_pDIBBase, m_ImageMatrix, m_ResampleOptions, &clip_box);
     return true;
   }

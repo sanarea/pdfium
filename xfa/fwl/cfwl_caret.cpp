@@ -8,7 +8,6 @@
 
 #include <utility>
 
-#include "third_party/base/ptr_util.h"
 #include "xfa/fwl/cfwl_app.h"
 #include "xfa/fwl/cfwl_notedriver.h"
 #include "xfa/fwl/cfwl_themebackground.h"
@@ -51,7 +50,7 @@ void CFWL_Caret::DrawWidget(CXFA_Graphics* pGraphics,
 }
 
 void CFWL_Caret::ShowCaret() {
-  m_pTimer = pdfium::MakeUnique<CFX_Timer>(
+  m_pTimer = std::make_unique<CFX_Timer>(
       GetOwnerApp()->GetAdapterNative()->GetTimerHandler(), this,
       kBlinkPeriodMs);
   RemoveStates(FWL_WGTSTATE_Invisible);
@@ -72,7 +71,7 @@ void CFWL_Caret::DrawCaretBK(CXFA_Graphics* pGraphics,
   CFWL_ThemeBackground param;
   param.m_pWidget = this;
   param.m_pGraphics = pGraphics;
-  param.m_rtPart = CFX_RectF(0, 0, GetWidgetRect().Size());
+  param.m_PartRect = CFX_RectF(0, 0, GetWidgetRect().Size());
   param.m_iPart = CFWL_Part::Background;
   param.m_dwStates = CFWL_PartState_HightLight;
   if (pMatrix)

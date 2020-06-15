@@ -36,14 +36,16 @@
 #include "fxjs/cjs_timerobj.h"
 #include "fxjs/cjs_util.h"
 #include "fxjs/cjs_zoomtype.h"
+#include "fxjs/fxv8.h"
 #include "fxjs/js_define.h"
-#include "third_party/base/ptr_util.h"
 
 CJS_Runtime::CJS_Runtime(CPDFSDK_FormFillEnvironment* pFormFillEnv)
     : m_pFormFillEnv(pFormFillEnv) {
   v8::Isolate* pIsolate = nullptr;
   IPDF_JSPLATFORM* pPlatform = m_pFormFillEnv->GetFormFillInfo()->m_pJsPlatform;
   if (pPlatform->version <= 2) {
+    // Backwards compatibility - JS now initialized earlier in more modern
+    // JSPLATFORM versions.
     unsigned int embedderDataSlot = 0;
     v8::Isolate* pExternalIsolate = nullptr;
     if (pPlatform->version == 2) {
@@ -120,7 +122,7 @@ void CJS_Runtime::DefineJSObjects() {
 }
 
 IJS_EventContext* CJS_Runtime::NewEventContext() {
-  m_EventContextArray.push_back(pdfium::MakeUnique<CJS_EventContext>(this));
+  m_EventContextArray.push_back(std::make_unique<CJS_EventContext>(this));
   return m_EventContextArray.back().get();
 }
 
@@ -181,10 +183,7 @@ bool CJS_Runtime::GetValueByNameFromGlobalObject(ByteStringView utf8Name,
   v8::Isolate::Scope isolate_scope(GetIsolate());
   v8::Local<v8::Context> context = GetV8Context();
   v8::Context::Scope context_scope(context);
-  v8::Local<v8::String> str =
-      v8::String::NewFromUtf8(GetIsolate(), utf8Name.unterminated_c_str(),
-                              v8::NewStringType::kNormal, utf8Name.GetLength())
-          .ToLocalChecked();
+  v8::Local<v8::String> str = fxv8::NewStringHelper(GetIsolate(), utf8Name);
   v8::MaybeLocal<v8::Value> maybe_propvalue =
       context->Global()->Get(context, str);
   if (maybe_propvalue.IsEmpty())
@@ -203,10 +202,7 @@ bool CJS_Runtime::SetValueByNameInGlobalObject(ByteStringView utf8Name,
   v8::Isolate::Scope isolate_scope(pIsolate);
   v8::Local<v8::Context> context = GetV8Context();
   v8::Context::Scope context_scope(context);
-  v8::Local<v8::String> str =
-      v8::String::NewFromUtf8(pIsolate, utf8Name.unterminated_c_str(),
-                              v8::NewStringType::kNormal, utf8Name.GetLength())
-          .ToLocalChecked();
+  v8::Local<v8::String> str = fxv8::NewStringHelper(pIsolate, utf8Name);
   v8::Maybe<bool> result = context->Global()->Set(context, str, pValue);
   return result.IsJust() && result.FromJust();
 }
@@ -216,7 +212,7 @@ v8::Local<v8::Value> CJS_Runtime::MaybeCoerceToNumber(
   bool bAllowNaN = false;
   if (value->IsString()) {
     ByteString bstr = ToWideString(value).ToDefANSI();
-    if (bstr.GetLength() == 0)
+    if (bstr.IsEmpty())
       return value;
     if (bstr == "NaN")
       bAllowNaN = true;

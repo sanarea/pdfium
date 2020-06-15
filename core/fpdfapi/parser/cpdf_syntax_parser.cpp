@@ -9,7 +9,6 @@
 #include <algorithm>
 #include <sstream>
 #include <utility>
-#include <vector>
 
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_boolean.h"
@@ -28,7 +27,6 @@
 #include "core/fxcrt/fx_extension.h"
 #include "core/fxcrt/fx_safe_types.h"
 #include "third_party/base/numerics/safe_math.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -76,7 +74,7 @@ int CPDF_SyntaxParser::s_CurrentRecursionDepth = 0;
 std::unique_ptr<CPDF_SyntaxParser> CPDF_SyntaxParser::CreateForTesting(
     const RetainPtr<IFX_SeekableReadStream>& pFileAccess,
     FX_FILESIZE HeaderOffset) {
-  return pdfium::MakeUnique<CPDF_SyntaxParser>(
+  return std::make_unique<CPDF_SyntaxParser>(
       pdfium::MakeRetain<CPDF_ReadValidator>(pFileAccess, nullptr),
       HeaderOffset);
 }
@@ -430,7 +428,7 @@ RetainPtr<CPDF_Object> CPDF_SyntaxParser::GetObjectBodyInternal(
   FX_FILESIZE SavedObjPos = m_Pos;
   bool bIsNumber;
   ByteString word = GetNextWord(&bIsNumber);
-  if (word.GetLength() == 0)
+  if (word.IsEmpty())
     return nullptr;
 
   if (bIsNumber) {
@@ -469,7 +467,7 @@ RetainPtr<CPDF_Object> CPDF_SyntaxParser::GetObjectBodyInternal(
     auto pArray = pdfium::MakeRetain<CPDF_Array>();
     while (RetainPtr<CPDF_Object> pObj =
                GetObjectBodyInternal(pObjList, ParseType::kLoose)) {
-      pArray->Add(std::move(pObj));
+      pArray->Append(std::move(pObj));
     }
     return (parse_type == ParseType::kLoose || m_WordBuffer[0] == ']')
                ? std::move(pArray)

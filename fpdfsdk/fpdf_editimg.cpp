@@ -6,9 +6,10 @@
 
 #include "public/fpdf_edit.h"
 
+#include <memory>
 #include <utility>
 
-#include "core/fpdfapi/page/cpdf_dibbase.h"
+#include "core/fpdfapi/page/cpdf_dib.h"
 #include "core/fpdfapi/page/cpdf_image.h"
 #include "core/fpdfapi/page/cpdf_imageobject.h"
 #include "core/fpdfapi/page/cpdf_page.h"
@@ -19,7 +20,6 @@
 #include "core/fpdfapi/parser/cpdf_stream_acc.h"
 #include "fpdfsdk/cpdfsdk_customaccess.h"
 #include "fpdfsdk/cpdfsdk_helpers.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -95,7 +95,7 @@ FPDFPageObj_NewImageObj(FPDF_DOCUMENT document) {
   if (!pDoc)
     return nullptr;
 
-  auto pImageObj = pdfium::MakeUnique<CPDF_ImageObject>();
+  auto pImageObj = std::make_unique<CPDF_ImageObject>();
   pImageObj->SetImage(pdfium::MakeRetain<CPDF_Image>(pDoc));
 
   // Caller takes ownership.
@@ -130,7 +130,13 @@ FPDFImageObj_GetMatrix(FPDF_PAGEOBJECT image_object,
   if (!pImgObj || !a || !b || !c || !d || !e || !f)
     return false;
 
-  std::tie(*a, *b, *c, *d, *e, *f) = pImgObj->matrix().AsTuple();
+  const CFX_Matrix& matrix = pImgObj->matrix();
+  *a = matrix.a;
+  *b = matrix.b;
+  *c = matrix.c;
+  *d = matrix.d;
+  *e = matrix.e;
+  *f = matrix.f;
   return true;
 }
 
@@ -286,10 +292,7 @@ FPDFImageObj_GetImageFilter(FPDF_PAGEOBJECT image_object,
   else
     bsFilter = pFilter->AsArray()->GetStringAt(index);
 
-  unsigned long len = bsFilter.GetLength() + 1;
-  if (buffer && len <= buflen)
-    memcpy(buffer, bsFilter.c_str(), len);
-  return len;
+  return NulTerminateMaybeCopyAndReturnLength(bsFilter, buffer, buflen);
 }
 
 FPDF_EXPORT FPDF_BOOL FPDF_CALLCONV
@@ -326,11 +329,11 @@ FPDFImageObj_GetImageMetadata(FPDF_PAGEOBJECT image_object,
   if (!pPage || !pPage->GetDocument() || !pImg->GetStream())
     return true;
 
-  auto pSource = pdfium::MakeRetain<CPDF_DIBBase>();
-  CPDF_DIBBase::LoadState ret = pSource->StartLoadDIBBase(
+  auto pSource = pdfium::MakeRetain<CPDF_DIB>();
+  CPDF_DIB::LoadState ret = pSource->StartLoadDIBBase(
       pPage->GetDocument(), pImg->GetStream(), false, nullptr,
       pPage->m_pPageResources.Get(), false, 0, false);
-  if (ret == CPDF_DIBBase::LoadState::kFail)
+  if (ret == CPDF_DIB::LoadState::kFail)
     return true;
 
   metadata->bits_per_pixel = pSource->GetBPP();

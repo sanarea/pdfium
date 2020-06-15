@@ -6,7 +6,6 @@
 
 #include "fpdfsdk/pwl/cpwl_wnd.h"
 
-#include <map>
 #include <sstream>
 #include <utility>
 #include <vector>
@@ -14,7 +13,6 @@
 #include "core/fxge/cfx_renderdevice.h"
 #include "fpdfsdk/pwl/cpwl_scroll_bar.h"
 #include "public/fpdf_fwlevent.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 
 namespace {
@@ -40,7 +38,7 @@ class CPWL_MsgControl final : public Observable {
   }
 
   bool IsWndCaptureMouse(const CPWL_Wnd* pWnd) const {
-    return pWnd && pdfium::ContainsValue(m_aMousePath, pWnd);
+    return pWnd && pdfium::Contains(m_aMousePath, pWnd);
   }
 
   bool IsMainCaptureKeyboard(const CPWL_Wnd* pWnd) const {
@@ -48,7 +46,7 @@ class CPWL_MsgControl final : public Observable {
   }
 
   bool IsWndCaptureKeyboard(const CPWL_Wnd* pWnd) const {
-    return pWnd && pdfium::ContainsValue(m_aKeyboardPath, pWnd);
+    return pWnd && pdfium::Contains(m_aKeyboardPath, pWnd);
   }
 
   void SetFocus(CPWL_Wnd* pWnd) {
@@ -89,9 +87,7 @@ class CPWL_MsgControl final : public Observable {
     }
   }
 
-  void ReleaseCapture() {
-    m_aMousePath.clear();
-  }
+  void ReleaseCapture() { m_aMousePath.clear(); }
 
   CPWL_Wnd* GetFocusedWindow() const { return m_pMainKeyboardWnd.Get(); }
 
@@ -290,14 +286,14 @@ PWL_IMPLEMENT_KEY_METHOD(OnChar)
 #undef PWL_IMPLEMENT_KEY_METHOD
 
 #define PWL_IMPLEMENT_MOUSE_METHOD(mouse_method_name)                          \
-  bool CPWL_Wnd::mouse_method_name(const CFX_PointF& point, uint32_t nFlag) {  \
+  bool CPWL_Wnd::mouse_method_name(uint32_t nFlag, const CFX_PointF& point) {  \
     if (!IsValid() || !IsVisible() || !IsEnabled())                            \
       return false;                                                            \
     if (IsWndCaptureMouse(this)) {                                             \
       for (const auto& pChild : m_Children) {                                  \
         if (IsWndCaptureMouse(pChild.get())) {                                 \
-          return pChild->mouse_method_name(pChild->ParentToChild(point),       \
-                                           nFlag);                             \
+          return pChild->mouse_method_name(nFlag,                              \
+                                           pChild->ParentToChild(point));      \
         }                                                                      \
       }                                                                        \
       SetCursor();                                                             \
@@ -305,7 +301,7 @@ PWL_IMPLEMENT_KEY_METHOD(OnChar)
     }                                                                          \
     for (const auto& pChild : m_Children) {                                    \
       if (pChild->WndHitTest(pChild->ParentToChild(point))) {                  \
-        return pChild->mouse_method_name(pChild->ParentToChild(point), nFlag); \
+        return pChild->mouse_method_name(nFlag, pChild->ParentToChild(point)); \
       }                                                                        \
     }                                                                          \
     if (WndHitTest(point))                                                     \
@@ -316,10 +312,17 @@ PWL_IMPLEMENT_KEY_METHOD(OnChar)
 PWL_IMPLEMENT_MOUSE_METHOD(OnLButtonDblClk)
 PWL_IMPLEMENT_MOUSE_METHOD(OnLButtonDown)
 PWL_IMPLEMENT_MOUSE_METHOD(OnLButtonUp)
-PWL_IMPLEMENT_MOUSE_METHOD(OnRButtonDown)
-PWL_IMPLEMENT_MOUSE_METHOD(OnRButtonUp)
 PWL_IMPLEMENT_MOUSE_METHOD(OnMouseMove)
 #undef PWL_IMPLEMENT_MOUSE_METHOD
+
+// Unlike their FWL counterparts, PWL windows don't handle right clicks.
+bool CPWL_Wnd::OnRButtonDown(uint32_t nFlag, const CFX_PointF& point) {
+  return false;
+}
+
+bool CPWL_Wnd::OnRButtonUp(uint32_t nFlag, const CFX_PointF& point) {
+  return false;
+}
 
 WideString CPWL_Wnd::GetText() {
   return WideString();
@@ -347,9 +350,9 @@ bool CPWL_Wnd::Redo() {
   return false;
 }
 
-bool CPWL_Wnd::OnMouseWheel(short zDelta,
+bool CPWL_Wnd::OnMouseWheel(uint32_t nFlag,
                             const CFX_PointF& point,
-                            uint32_t nFlag) {
+                            const CFX_Vector& delta) {
   if (!IsValid() || !IsVisible() || !IsEnabled())
     return false;
 
@@ -359,7 +362,7 @@ bool CPWL_Wnd::OnMouseWheel(short zDelta,
 
   for (const auto& pChild : m_Children) {
     if (IsWndCaptureKeyboard(pChild.get()))
-      return pChild->OnMouseWheel(zDelta, pChild->ParentToChild(point), nFlag);
+      return pChild->OnMouseWheel(nFlag, pChild->ParentToChild(point), delta);
   }
   return false;
 }
@@ -485,7 +488,7 @@ void CPWL_Wnd::CreateVScrollBar(const CreateParams& cp) {
   scp.nTransparency = PWL_SCROLLBAR_TRANSPARENCY;
 
   auto pBar =
-      pdfium::MakeUnique<CPWL_ScrollBar>(scp, CloneAttachedData(), SBT_VSCROLL);
+      std::make_unique<CPWL_ScrollBar>(scp, CloneAttachedData(), SBT_VSCROLL);
   m_pVScrollBar = pBar.get();
   AddChild(std::move(pBar));
   m_pVScrollBar->Realize();
@@ -622,17 +625,17 @@ bool CPWL_Wnd::IsCaptureMouse() const {
 
 bool CPWL_Wnd::IsWndCaptureMouse(const CPWL_Wnd* pWnd) const {
   CPWL_MsgControl* pCtrl = GetMsgControl();
-  return pCtrl ? pCtrl->IsWndCaptureMouse(pWnd) : false;
+  return pCtrl && pCtrl->IsWndCaptureMouse(pWnd);
 }
 
 bool CPWL_Wnd::IsWndCaptureKeyboard(const CPWL_Wnd* pWnd) const {
   CPWL_MsgControl* pCtrl = GetMsgControl();
-  return pCtrl ? pCtrl->IsWndCaptureKeyboard(pWnd) : false;
+  return pCtrl && pCtrl->IsWndCaptureKeyboard(pWnd);
 }
 
 bool CPWL_Wnd::IsFocused() const {
   CPWL_MsgControl* pCtrl = GetMsgControl();
-  return pCtrl ? pCtrl->IsMainCaptureKeyboard(this) : false;
+  return pCtrl && pCtrl->IsMainCaptureKeyboard(this);
 }
 
 CFX_FloatRect CPWL_Wnd::GetFocusRect() const {

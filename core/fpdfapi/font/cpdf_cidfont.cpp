@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "build/build_config.h"
-#include "core/fpdfapi/cmaps/cmap_int.h"
+#include "core/fpdfapi/cmaps/fpdf_cmaps.h"
 #include "core/fpdfapi/font/cfx_cttgsubtable.h"
 #include "core/fpdfapi/font/cpdf_cid2unicodemap.h"
 #include "core/fpdfapi/font/cpdf_cmap.h"
@@ -21,9 +21,9 @@
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_stream_acc.h"
+#include "core/fxcrt/fx_memory.h"
+#include "core/fxcrt/fx_safe_types.h"
 #include "core/fxge/fx_font.h"
-#include "third_party/base/numerics/safe_math.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/span.h"
 #include "third_party/base/stl_util.h"
 
@@ -209,11 +209,11 @@ bool IsMetricForCID(const uint32_t* pEntry, uint16_t CID) {
 
 CPDF_CIDFont::CPDF_CIDFont(CPDF_Document* pDocument, CPDF_Dictionary* pFontDict)
     : CPDF_Font(pDocument, pFontDict) {
-  for (size_t i = 0; i < FX_ArraySize(m_CharBBox); ++i)
+  for (size_t i = 0; i < pdfium::size(m_CharBBox); ++i)
     m_CharBBox[i] = FX_RECT(-1, -1, -1, -1);
 }
 
-CPDF_CIDFont::~CPDF_CIDFont() {}
+CPDF_CIDFont::~CPDF_CIDFont() = default;
 
 bool CPDF_CIDFont::IsCIDFont() const {
   return true;
@@ -360,7 +360,8 @@ bool CPDF_CIDFont::Load() {
   } else if (CPDF_Stream* pStream = pEncoding->AsStream()) {
     auto pAcc = pdfium::MakeRetain<CPDF_StreamAcc>(pStream);
     pAcc->LoadAllDataFiltered();
-    m_pCMap = pdfium::MakeRetain<CPDF_CMap>(pAcc->GetSpan());
+    pdfium::span<const uint8_t> span = pAcc->GetSpan();
+    m_pCMap = pdfium::MakeRetain<CPDF_CMap>(span);
   } else {
     return false;
   }
@@ -575,7 +576,7 @@ int CPDF_CIDFont::GetGlyphIndex(uint32_t unicode, bool* pVertGlyph) {
   if (error || !m_Font.GetSubData())
     return index;
 
-  m_pTTGSUBTable = pdfium::MakeUnique<CFX_CTTGSUBTable>(m_Font.GetSubData());
+  m_pTTGSUBTable = std::make_unique<CFX_CTTGSUBTable>(m_Font.GetSubData());
   return GetVerticalGlyph(index, pVertGlyph);
 }
 
@@ -752,7 +753,7 @@ bool CPDF_CIDFont::IsUnicodeCompatible() const {
 }
 
 void CPDF_CIDFont::LoadSubstFont() {
-  pdfium::base::CheckedNumeric<int> safeStemV(m_StemV);
+  FX_SAFE_INT32 safeStemV(m_StemV);
   safeStemV *= 5;
   m_Font.LoadSubst(m_BaseFontName, !m_bType1, m_Flags,
                    safeStemV.ValueOrDefault(FXFONT_FW_NORMAL), m_ItalicAngle,
@@ -836,7 +837,7 @@ const uint8_t* CPDF_CIDFont::GetCIDTransform(uint16_t CID) const {
   if (m_Charset != CIDSET_JAPAN1 || m_pFontFile)
     return nullptr;
 
-  const auto* pEnd = g_Japan1_VertCIDs + FX_ArraySize(g_Japan1_VertCIDs);
+  const auto* pEnd = g_Japan1_VertCIDs + pdfium::size(g_Japan1_VertCIDs);
   const auto* pTransform = std::lower_bound(
       g_Japan1_VertCIDs, pEnd, CID,
       [](const CIDTransform& entry, uint16_t cid) { return entry.cid < cid; });

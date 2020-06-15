@@ -34,8 +34,7 @@
 #include "core/fpdfapi/parser/cpdf_stream.h"
 #include "core/fpdfapi/parser/fpdf_parser_decode.h"
 #include "core/fpdfapi/parser/fpdf_parser_utility.h"
-#include "core/fxge/render_defines.h"
-#include "third_party/base/ptr_util.h"
+#include "third_party/base/span.h"
 #include "third_party/base/stl_util.h"
 
 namespace {
@@ -63,7 +62,7 @@ CPDF_PageContentGenerator::CPDF_PageContentGenerator(
   }
 }
 
-CPDF_PageContentGenerator::~CPDF_PageContentGenerator() {}
+CPDF_PageContentGenerator::~CPDF_PageContentGenerator() = default;
 
 void CPDF_PageContentGenerator::GenerateContent() {
   ASSERT(m_pObjHolder->IsPage());
@@ -93,12 +92,12 @@ CPDF_PageContentGenerator::GenerateModifiedStreams() {
   std::map<int32_t, std::unique_ptr<std::ostringstream>> streams;
   std::set<int32_t> empty_streams;
   std::unique_ptr<const CPDF_ContentMarks> empty_content_marks =
-      pdfium::MakeUnique<CPDF_ContentMarks>();
+      std::make_unique<CPDF_ContentMarks>();
   std::map<int32_t, const CPDF_ContentMarks*> current_content_marks;
 
   for (int32_t dirty_stream : all_dirty_streams) {
     std::unique_ptr<std::ostringstream> buf =
-        pdfium::MakeUnique<std::ostringstream>();
+        std::make_unique<std::ostringstream>();
 
     // Set the default graphic state values
     *buf << "q\n";
@@ -129,7 +128,7 @@ CPDF_PageContentGenerator::GenerateModifiedStreams() {
   // Finish dirty streams.
   for (int32_t dirty_stream : all_dirty_streams) {
     std::ostringstream* buf = streams[dirty_stream].get();
-    if (pdfium::ContainsKey(empty_streams, dirty_stream)) {
+    if (pdfium::Contains(empty_streams, dirty_stream)) {
       // Clear to show that this stream needs to be deleted.
       buf->str("");
     } else {
@@ -207,7 +206,7 @@ ByteString CPDF_PageContentGenerator::RealizeResource(
 bool CPDF_PageContentGenerator::ProcessPageObjects(std::ostringstream* buf) {
   bool bDirty = false;
   std::unique_ptr<const CPDF_ContentMarks> empty_content_marks =
-      pdfium::MakeUnique<CPDF_ContentMarks>();
+      std::make_unique<CPDF_ContentMarks>();
   const CPDF_ContentMarks* content_marks = empty_content_marks.get();
 
   for (auto& pPageObj : m_pageObjects) {
@@ -349,45 +348,45 @@ void CPDF_PageContentGenerator::ProcessPath(std::ostringstream* buf,
 
   *buf << pPathObj->matrix() << " cm ";
 
-  const auto& pPoints = pPathObj->path().GetPoints();
+  pdfium::span<const FX_PATHPOINT> points = pPathObj->path().GetPoints();
   if (pPathObj->path().IsRect()) {
-    CFX_PointF diff = pPoints[2].m_Point - pPoints[0].m_Point;
-    *buf << pPoints[0].m_Point << " " << diff << " re";
+    CFX_PointF diff = points[2].m_Point - points[0].m_Point;
+    *buf << points[0].m_Point << " " << diff << " re";
   } else {
-    for (size_t i = 0; i < pPoints.size(); i++) {
+    for (size_t i = 0; i < points.size(); ++i) {
       if (i > 0)
         *buf << " ";
 
-      *buf << pPoints[i].m_Point;
+      *buf << points[i].m_Point;
 
-      FXPT_TYPE pointType = pPoints[i].m_Type;
-      if (pointType == FXPT_TYPE::MoveTo) {
+      FXPT_TYPE point_type = points[i].m_Type;
+      if (point_type == FXPT_TYPE::MoveTo) {
         *buf << " m";
-      } else if (pointType == FXPT_TYPE::LineTo) {
+      } else if (point_type == FXPT_TYPE::LineTo) {
         *buf << " l";
-      } else if (pointType == FXPT_TYPE::BezierTo) {
-        if (i + 2 >= pPoints.size() ||
-            !pPoints[i].IsTypeAndOpen(FXPT_TYPE::BezierTo) ||
-            !pPoints[i + 1].IsTypeAndOpen(FXPT_TYPE::BezierTo) ||
-            pPoints[i + 2].m_Type != FXPT_TYPE::BezierTo) {
+      } else if (point_type == FXPT_TYPE::BezierTo) {
+        if (i + 2 >= points.size() ||
+            !points[i].IsTypeAndOpen(FXPT_TYPE::BezierTo) ||
+            !points[i + 1].IsTypeAndOpen(FXPT_TYPE::BezierTo) ||
+            points[i + 2].m_Type != FXPT_TYPE::BezierTo) {
           // If format is not supported, close the path and paint
           *buf << " h";
           break;
         }
         *buf << " ";
-        *buf << pPoints[i + 1].m_Point << " ";
-        *buf << pPoints[i + 2].m_Point << " c";
+        *buf << points[i + 1].m_Point << " ";
+        *buf << points[i + 2].m_Point << " c";
         i += 2;
       }
-      if (pPoints[i].m_CloseFigure)
+      if (points[i].m_CloseFigure)
         *buf << " h";
     }
   }
-  if (pPathObj->filltype() == 0)
+  if (pPathObj->has_no_filltype())
     *buf << (pPathObj->stroke() ? " S" : " n");
-  else if (pPathObj->filltype() == FXFILL_WINDING)
+  else if (pPathObj->has_winding_filltype())
     *buf << (pPathObj->stroke() ? " B" : " f");
-  else if (pPathObj->filltype() == FXFILL_ALTERNATE)
+  else if (pPathObj->has_alternate_filltype())
     *buf << (pPathObj->stroke() ? " B*" : " f*");
   *buf << " Q\n";
 }

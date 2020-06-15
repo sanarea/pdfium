@@ -7,27 +7,31 @@
 #ifndef FXJS_CFX_KEYVALUE_H_
 #define FXJS_CFX_KEYVALUE_H_
 
+#include <memory>
+#include <vector>
+
 #include "core/fxcrt/fx_string.h"
-#include "fxjs/cfx_globalarray.h"
+
+class CFX_KeyValue;
 
 class CFX_Value {
  public:
   enum class DataType : uint8_t {
-    NUMBER = 0,
-    BOOLEAN,
-    STRING,
-    OBJECT,
-    NULLOBJ
+    kNumber = 0,
+    kBoolean,
+    kString,
+    kObject,
+    kNull
   };
 
   CFX_Value();
   ~CFX_Value();
 
-  DataType nType = DataType::NULLOBJ;
+  DataType nType = DataType::kNull;
   bool bData;
   double dData;
   ByteString sData;
-  CFX_GlobalArray objData;
+  std::vector<std::unique_ptr<CFX_KeyValue>> objData;
 };
 
 class CFX_KeyValue : public CFX_Value {

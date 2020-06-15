@@ -14,7 +14,6 @@
 #include "core/fxge/dib/cfx_dibitmap.h"
 #include "core/fxge/dib/cstretchengine.h"
 #include "core/fxge/fx_dib.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 
 namespace {
@@ -53,18 +52,15 @@ CFX_ImageStretcher::CFX_ImageStretcher(ScanlineComposerIface* pDest,
     : m_pDest(pDest),
       m_pSource(pSource),
       m_ResampleOptions(options),
-      m_bFlipX(false),
-      m_bFlipY(false),
       m_DestWidth(dest_width),
       m_DestHeight(dest_height),
       m_ClipRect(bitmap_rect),
       m_DestFormat(GetStretchedFormat(*pSource)),
-      m_DestBPP(GetBppFromFormat(m_DestFormat)),
-      m_LineIndex(0) {
+      m_DestBPP(GetBppFromFormat(m_DestFormat)) {
   ASSERT(m_ClipRect.Valid());
 }
 
-CFX_ImageStretcher::~CFX_ImageStretcher() {}
+CFX_ImageStretcher::~CFX_ImageStretcher() = default;
 
 bool CFX_ImageStretcher::Start() {
   if (m_DestWidth == 0 || m_DestHeight == 0)
@@ -121,15 +117,10 @@ bool CFX_ImageStretcher::Start() {
                                m_DestFormat, nullptr)) {
     return false;
   }
-
-  if (m_ResampleOptions.bInterpolateDownsample)
-    return StartQuickStretch();
   return StartStretch();
 }
 
 bool CFX_ImageStretcher::Continue(PauseIndicatorIface* pPause) {
-  if (m_ResampleOptions.bInterpolateDownsample)
-    return ContinueQuickStretch(pPause);
   return ContinueStretch(pPause);
 }
 
@@ -138,7 +129,7 @@ RetainPtr<CFX_DIBBase> CFX_ImageStretcher::source() {
 }
 
 bool CFX_ImageStretcher::StartStretch() {
-  m_pStretchEngine = pdfium::MakeUnique<CStretchEngine>(
+  m_pStretchEngine = std::make_unique<CStretchEngine>(
       m_pDest.Get(), m_DestFormat, m_DestWidth, m_DestHeight, m_ClipRect,
       m_pSource, m_ResampleOptions);
   m_pStretchEngine->StartStretchHorz();
@@ -151,77 +142,4 @@ bool CFX_ImageStretcher::StartStretch() {
 
 bool CFX_ImageStretcher::ContinueStretch(PauseIndicatorIface* pPause) {
   return m_pStretchEngine && m_pStretchEngine->Continue(pPause);
-}
-
-bool CFX_ImageStretcher::StartQuickStretch() {
-  if (m_DestWidth < 0) {
-    m_bFlipX = true;
-    m_DestWidth = -m_DestWidth;
-  }
-  if (m_DestHeight < 0) {
-    m_bFlipY = true;
-    m_DestHeight = -m_DestHeight;
-  }
-  uint32_t size = m_ClipRect.Width();
-  if (size && m_DestBPP > static_cast<int>(INT_MAX / size))
-    return false;
-
-  size *= m_DestBPP;
-  m_pScanline.reset(FX_Alloc(uint8_t, FxAlignToBoundary<4>(size / 8)));
-  if (m_pSource->m_pAlphaMask) {
-    m_pMaskScanline.reset(
-        FX_Alloc(uint8_t, FxAlignToBoundary<4>(m_ClipRect.Width())));
-  }
-  if (SourceSizeWithinLimit(m_pSource->GetWidth(), m_pSource->GetHeight())) {
-    ContinueQuickStretch(nullptr);
-    return false;
-  }
-  return true;
-}
-
-bool CFX_ImageStretcher::ContinueQuickStretch(PauseIndicatorIface* pPause) {
-  if (!m_pScanline)
-    return false;
-
-  int result_width = m_ClipRect.Width();
-  int result_height = m_ClipRect.Height();
-  int src_height = m_pSource->GetHeight();
-  for (; m_LineIndex < result_height; ++m_LineIndex) {
-    int dest_y;
-    FX_SAFE_INT64 calc_buf;
-    if (m_bFlipY) {
-      dest_y = result_height - m_LineIndex - 1;
-      calc_buf = m_DestHeight;
-      calc_buf -= dest_y;
-      calc_buf -= m_ClipRect.top;
-      calc_buf -= 1;
-      calc_buf *= src_height;
-      calc_buf /= m_DestHeight;
-    } else {
-      dest_y = m_LineIndex;
-      calc_buf = dest_y;
-      calc_buf += m_ClipRect.top;
-      calc_buf *= src_height;
-      calc_buf /= m_DestHeight;
-    }
-
-    int src_y;
-    if (!calc_buf.AssignIfValid(&src_y))
-      return false;
-
-    src_y = pdfium::clamp(src_y, 0, src_height - 1);
-    if (m_pSource->SkipToScanline(src_y, pPause))
-      return true;
-
-    m_pSource->DownSampleScanline(src_y, m_pScanline.get(), m_DestBPP,
-                                  m_DestWidth, m_bFlipX, m_ClipRect.left,
-                                  result_width);
-    if (m_pMaskScanline) {
-      m_pSource->m_pAlphaMask->DownSampleScanline(
-          src_y, m_pMaskScanline.get(), 1, m_DestWidth, m_bFlipX,
-          m_ClipRect.left, result_width);
-    }
-    m_pDest->ComposeScanline(dest_y, m_pScanline.get(), m_pMaskScanline.get());
-  }
-  return false;
 }

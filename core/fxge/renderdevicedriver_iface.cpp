@@ -10,7 +10,7 @@
 #include "core/fxge/cfx_pathdata.h"
 #include "core/fxge/dib/cfx_dibitmap.h"
 
-RenderDeviceDriverIface::~RenderDeviceDriverIface() {}
+RenderDeviceDriverIface::~RenderDeviceDriverIface() = default;
 
 bool RenderDeviceDriverIface::StartRendering() {
   return true;
@@ -24,6 +24,8 @@ bool RenderDeviceDriverIface::SetClip_PathStroke(
     const CFX_GraphStateData* pGraphState) {
   return false;
 }
+
+void RenderDeviceDriverIface::SetBaseClip(const FX_RECT& rect) {}
 
 bool RenderDeviceDriverIface::SetPixel(int x, int y, uint32_t color) {
   return false;

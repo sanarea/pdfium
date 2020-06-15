@@ -13,6 +13,7 @@
 #include "build/build_config.h"
 #include "core/fxcrt/bytestring.h"
 #include "core/fxcrt/fx_coordinates.h"
+#include "core/fxcrt/fx_memory_wrappers.h"
 #include "core/fxge/cfx_face.h"
 #include "core/fxge/fx_freetype.h"
 #include "third_party/base/span.h"
@@ -87,6 +88,9 @@ class CFX_Font {
   bool IsItalic() const;
   bool IsBold() const;
   bool IsFixedWidth() const;
+#if defined _SKIA_SUPPORT_ || defined _SKIA_SUPPORT_PATHS_
+  bool IsSubstFontBold() const;
+#endif
   bool IsVertical() const { return m_bVertical; }
   ByteString GetPsName() const;
   ByteString GetFamilyName() const;
@@ -106,9 +110,9 @@ class CFX_Font {
   void SetPlatformFont(void* font) { m_pPlatformFont = font; }
 #endif
 
-  static const size_t kAngleSkewArraySize = 30;
+  static constexpr size_t kAngleSkewArraySize = 30;
   static const char s_AngleSkew[kAngleSkewArraySize];
-  static const size_t kWeightPowArraySize = 100;
+  static constexpr size_t kWeightPowArraySize = 100;
   static const uint8_t s_WeightPow[kWeightPowArraySize];
   static const uint8_t s_WeightPow_11[kWeightPowArraySize];
   static const uint8_t s_WeightPow_SHIFTJIS[kWeightPowArraySize];
@@ -141,7 +145,7 @@ class CFX_Font {
   mutable RetainPtr<CFX_GlyphCache> m_GlyphCache;
   std::unique_ptr<CFX_SubstFont> m_pSubstFont;
   std::unique_ptr<uint8_t, FxFreeDeleter> m_pGsubData;
-  std::vector<uint8_t> m_pFontDataAllocation;
+  std::vector<uint8_t, FxAllocAllocator<uint8_t>> m_FontDataAllocation;
   pdfium::span<uint8_t> m_FontData;
   bool m_bEmbedded = false;
   bool m_bVertical = false;

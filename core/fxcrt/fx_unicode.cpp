@@ -6,7 +6,7 @@
 
 #include "core/fxcrt/fx_unicode.h"
 
-#include "core/fxcrt/fx_memory.h"
+#include "third_party/base/stl_util.h"
 
 namespace {
 
@@ -25,12 +25,12 @@ constexpr uint16_t kMirrorMax = (1 << kMirrorBitCount) - 1;
   ((mirror << kMirrorBitPos) |           \
    (static_cast<uint16_t>(FX_BIDICLASS::bd) << kBidiClassBitPos)),
 constexpr uint16_t kTextLayoutCodeProperties[] = {
-#include "core/fxcrt/fx_ucddata.inc"
+#include "core/fxcrt/fx_ucddata.inc"  // NOLINT(build/include)
 };
 #undef CHARPROP____
 
 constexpr size_t kTextLayoutCodePropertiesSize =
-    FX_ArraySize(kTextLayoutCodeProperties);
+    pdfium::size(kTextLayoutCodeProperties);
 
 static_assert(kTextLayoutCodePropertiesSize == 65536, "missing characters");
 
@@ -58,12 +58,12 @@ constexpr uint16_t kCharTypeBitMask =
   ((static_cast<uint16_t>(FX_CHARTYPE::ct) << kCharTypeBitPos) | \
    (static_cast<uint16_t>(FX_BREAKPROPERTY::bt) << kBreakTypeBitPos)),
 constexpr uint16_t kExtendedTextLayoutCodeProperties[] = {
-#include "core/fxcrt/fx_ucddata.inc"
+#include "core/fxcrt/fx_ucddata.inc"  // NOLINT(build/include)
 };
 #undef CHARPROP____
 
 constexpr size_t kExtendedTextLayoutCodePropertiesSize =
-    FX_ArraySize(kExtendedTextLayoutCodeProperties);
+    pdfium::size(kExtendedTextLayoutCodeProperties);
 
 static_assert(kExtendedTextLayoutCodePropertiesSize == 65536,
               "missing characters");
@@ -75,7 +75,7 @@ uint16_t GetExtendedUnicodeProperties(wchar_t wch) {
   return 0;
 }
 
-#endif  // PDF_ENBABLE_XFA
+#endif  // PDF_ENABLE_XFA
 
 constexpr uint16_t kFXTextLayoutBidiMirror[] = {
     0x0029, 0x0028, 0x003E, 0x003C, 0x005D, 0x005B, 0x007D, 0x007B, 0x00BB,
@@ -122,14 +122,14 @@ constexpr uint16_t kFXTextLayoutBidiMirror[] = {
 };
 
 constexpr size_t kFXTextLayoutBidiMirrorSize =
-    FX_ArraySize(kFXTextLayoutBidiMirror);
+    pdfium::size(kFXTextLayoutBidiMirror);
 
 // Check that the mirror indicies in the fx_ucddata.inc table are in bounds.
 #undef CHARPROP____
 #define CHARPROP____(mirror, ct, bd, bt)                                      \
   static_assert(mirror == kMirrorMax || mirror < kFXTextLayoutBidiMirrorSize, \
                 "Bad mirror index");
-#include "core/fxcrt/fx_ucddata.inc"
+#include "core/fxcrt/fx_ucddata.inc"  // NOLINT(build/include)
 #undef CHARPROP____
 
 }  // namespace

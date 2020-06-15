@@ -6,9 +6,9 @@
 
 #include "xfa/fxfa/cxfa_ffnumericedit.h"
 
+#include <memory>
 #include <utility>
 
-#include "third_party/base/ptr_util.h"
 #include "xfa/fwl/cfwl_edit.h"
 #include "xfa/fwl/cfwl_eventvalidate.h"
 #include "xfa/fwl/cfwl_notedriver.h"
@@ -24,21 +24,27 @@ CXFA_FFNumericEdit::~CXFA_FFNumericEdit() = default;
 
 bool CXFA_FFNumericEdit::LoadWidget() {
   ASSERT(!IsLoaded());
-  auto pNewEdit = pdfium::MakeUnique<CFWL_Edit>(
-      GetFWLApp(), pdfium::MakeUnique<CFWL_WidgetProperties>(), nullptr);
+
+  // Prevents destruction of the CXFA_ContentLayoutItem that owns |this|.
+  RetainPtr<CXFA_ContentLayoutItem> retain_layout(m_pLayoutItem.Get());
+
+  auto pNewEdit = std::make_unique<CFWL_Edit>(
+      GetFWLApp(), std::make_unique<CFWL_WidgetProperties>(), nullptr);
   CFWL_Edit* pWidget = pNewEdit.get();
   SetNormalWidget(std::move(pNewEdit));
-  pWidget->SetFFWidget(this);
+  pWidget->SetAdapterIface(this);
 
   CFWL_NoteDriver* pNoteDriver = pWidget->GetOwnerApp()->GetNoteDriver();
   pNoteDriver->RegisterEventTarget(pWidget, pWidget);
   m_pOldDelegate = pWidget->GetDelegate();
   pWidget->SetDelegate(this);
-  pWidget->LockUpdate();
 
-  pWidget->SetText(m_pNode->GetValue(XFA_VALUEPICTURE_Display));
-  UpdateWidgetProperty();
-  pWidget->UnlockUpdate();
+  {
+    CFWL_Widget::ScopedUpdateLock update_lock(pWidget);
+    pWidget->SetText(m_pNode->GetValue(XFA_VALUEPICTURE_Display));
+    UpdateWidgetProperty();
+  }
+
   return CXFA_FFField::LoadWidget();
 }
 
@@ -67,6 +73,9 @@ void CXFA_FFNumericEdit::UpdateWidgetProperty() {
 }
 
 void CXFA_FFNumericEdit::OnProcessEvent(CFWL_Event* pEvent) {
+  // Prevents destruction of the CXFA_ContentLayoutItem that owns |this|.
+  RetainPtr<CXFA_ContentLayoutItem> retain_layout(m_pLayoutItem.Get());
+
   if (pEvent->GetType() == CFWL_Event::Type::Validate) {
     CFWL_EventValidate* event = static_cast<CFWL_EventValidate*>(pEvent);
     event->bValidate = OnValidate(GetNormalWidget(), event->wsInsert);
@@ -76,6 +85,9 @@ void CXFA_FFNumericEdit::OnProcessEvent(CFWL_Event* pEvent) {
 }
 
 bool CXFA_FFNumericEdit::OnValidate(CFWL_Widget* pWidget, WideString& wsText) {
+  // Prevents destruction of the CXFA_ContentLayoutItem that owns |this|.
+  RetainPtr<CXFA_ContentLayoutItem> retainer(m_pLayoutItem.Get());
+
   WideString wsPattern = m_pNode->GetPictureContent(XFA_VALUEPICTURE_Edit);
   if (!wsPattern.IsEmpty())
     return true;

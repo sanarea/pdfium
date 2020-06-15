@@ -14,7 +14,6 @@
 #include "fpdfsdk/cpdfsdk_widget.h"
 #include "fpdfsdk/formfiller/cffl_interactiveformfiller.h"
 #include "fpdfsdk/pwl/cpwl_list_box.h"
-#include "third_party/base/ptr_util.h"
 
 CFFL_ListBox::CFFL_ListBox(CPDFSDK_FormFillEnvironment* pApp,
                            CPDFSDK_Widget* pWidget)
@@ -42,7 +41,7 @@ CPWL_Wnd::CreateParams CFFL_ListBox::GetCreateParam() {
 std::unique_ptr<CPWL_Wnd> CFFL_ListBox::NewPWLWindow(
     const CPWL_Wnd::CreateParams& cp,
     std::unique_ptr<IPWL_SystemHandler::PerWindowData> pAttachedData) {
-  auto pWnd = pdfium::MakeUnique<CPWL_ListBox>(cp, std::move(pAttachedData));
+  auto pWnd = std::make_unique<CPWL_ListBox>(cp, std::move(pAttachedData));
   pWnd->AttachFFLData(this);
   pWnd->Realize();
   pWnd->SetFillerNotify(m_pFormFillEnv->GetInteractiveFormFiller());
@@ -197,7 +196,7 @@ bool CFFL_ListBox::SetIndexSelected(int index, bool selected) {
   if (index < 0 || index >= m_pWidget->CountOptions())
     return false;
 
-  CPWL_ListBox* pListBox = GetListBox(GetCurPageView(true));
+  CPWL_ListBox* pListBox = GetListBox(GetCurPageView());
   if (!pListBox)
     return false;
 
@@ -219,7 +218,7 @@ bool CFFL_ListBox::IsIndexSelected(int index) {
   if (index < 0 || index >= m_pWidget->CountOptions())
     return false;
 
-  CPWL_ListBox* pListBox = GetListBox(GetCurPageView(true));
+  CPWL_ListBox* pListBox = GetListBox(GetCurPageView());
   return pListBox && pListBox->IsItemSelected(index);
 }
 

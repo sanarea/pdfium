@@ -6,11 +6,6 @@
 
 #include "core/fpdfapi/parser/cpdf_document.h"
 
-#include <set>
-#include <utility>
-#include <vector>
-
-#include "build/build_config.h"
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_linearized_header.h"
@@ -19,13 +14,8 @@
 #include "core/fpdfapi/parser/cpdf_parser.h"
 #include "core/fpdfapi/parser/cpdf_read_validator.h"
 #include "core/fpdfapi/parser/cpdf_reference.h"
-#include "core/fpdfapi/parser/cpdf_stream.h"
-#include "core/fpdfapi/parser/cpdf_stream_acc.h"
-#include "core/fpdfapi/parser/cpdf_string.h"
 #include "core/fxcodec/jbig2/JBig2_DocumentContext.h"
 #include "core/fxcrt/fx_codepage.h"
-#include "core/fxge/fx_font.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 
 namespace {
@@ -43,7 +33,7 @@ int CountPages(CPDF_Dictionary* pPages,
   count = 0;
   for (size_t i = 0; i < pKidList->size(); i++) {
     CPDF_Dictionary* pKid = pKidList->GetDictAt(i);
-    if (!pKid || pdfium::ContainsKey(*visited_pages, pKid))
+    if (!pKid || pdfium::Contains(*visited_pages, pKid))
       continue;
     if (pKid->KeyExist("Kids")) {
       // Use |visited_pages| to help detect circular references of pages.
@@ -59,6 +49,56 @@ int CountPages(CPDF_Dictionary* pPages,
   return count;
 }
 
+int FindPageIndex(const CPDF_Dictionary* pNode,
+                  uint32_t* skip_count,
+                  uint32_t objnum,
+                  int* index,
+                  int level) {
+  if (!pNode->KeyExist("Kids")) {
+    if (objnum == pNode->GetObjNum())
+      return *index;
+
+    if (*skip_count != 0)
+      (*skip_count)--;
+
+    (*index)++;
+    return -1;
+  }
+
+  const CPDF_Array* pKidList = pNode->GetArrayFor("Kids");
+  if (!pKidList)
+    return -1;
+
+  if (level >= kMaxPageLevel)
+    return -1;
+
+  size_t count = pNode->GetIntegerFor("Count");
+  if (count <= *skip_count) {
+    (*skip_count) -= count;
+    (*index) += count;
+    return -1;
+  }
+
+  if (count && count == pKidList->size()) {
+    for (size_t i = 0; i < count; i++) {
+      const CPDF_Reference* pKid = ToReference(pKidList->GetObjectAt(i));
+      if (pKid && pKid->GetRefObjNum() == objnum)
+        return static_cast<int>(*index + i);
+    }
+  }
+
+  for (size_t i = 0; i < pKidList->size(); i++) {
+    const CPDF_Dictionary* pKid = pKidList->GetDictAt(i);
+    if (!pKid || pKid == pNode)
+      continue;
+
+    int found_index = FindPageIndex(pKid, skip_count, objnum, index, level + 1);
+    if (found_index >= 0)
+      return found_index;
+  }
+  return -1;
+}
+
 }  // namespace
 
 CPDF_Document::CPDF_Document(std::unique_ptr<RenderDataIface> pRenderData,
@@ -71,6 +111,16 @@ CPDF_Document::CPDF_Document(std::unique_ptr<RenderDataIface> pRenderData,
 }
 
 CPDF_Document::~CPDF_Document() = default;
+
+// static
+bool CPDF_Document::IsValidPageObject(const CPDF_Object* obj) {
+  const CPDF_Dictionary* dict = ToDictionary(obj);
+  if (!dict)
+    return false;
+
+  const CPDF_Name* name = ToName(dict->GetObjectFor("Type"));
+  return name && name->GetString() == "Page";
+}
 
 RetainPtr<CPDF_Object> CPDF_Document::ParseIndirectObject(uint32_t objnum) {
   return m_pParser ? m_pParser->ParseIndirectObject(objnum) : nullptr;
@@ -91,7 +141,7 @@ CPDF_Parser::Error CPDF_Document::LoadDoc(
     const RetainPtr<IFX_SeekableReadStream>& pFileAccess,
     const char* password) {
   if (!m_pParser)
-    SetParser(pdfium::MakeUnique<CPDF_Parser>(this));
+    SetParser(std::make_unique<CPDF_Parser>(this));
 
   return HandleLoadResult(m_pParser->StartParse(pFileAccess, password));
 }
@@ -100,7 +150,7 @@ CPDF_Parser::Error CPDF_Document::LoadLinearizedDoc(
     const RetainPtr<CPDF_ReadValidator>& validator,
     const char* password) {
   if (!m_pParser)
-    SetParser(pdfium::MakeUnique<CPDF_Parser>(this));
+    SetParser(std::make_unique<CPDF_Parser>(this));
 
   return HandleLoadResult(m_pParser->StartLinearizedParse(validator, password));
 }
@@ -113,10 +163,17 @@ void CPDF_Document::LoadPages() {
     return;
   }
 
-  m_PageList.resize(linearized_header->GetPageCount());
-  ASSERT(linearized_header->GetFirstPageNo() < m_PageList.size());
-  m_PageList[linearized_header->GetFirstPageNo()] =
-      linearized_header->GetFirstPageObjNum();
+  uint32_t objnum = linearized_header->GetFirstPageObjNum();
+  if (!IsValidPageObject(GetOrParseIndirectObject(objnum))) {
+    m_PageList.resize(RetrievePageCount());
+    return;
+  }
+
+  uint32_t first_page_num = linearized_header->GetFirstPageNo();
+  uint32_t page_count = linearized_header->GetPageCount();
+  ASSERT(first_page_num < page_count);
+  m_PageList.resize(page_count);
+  m_PageList[first_page_num] = objnum;
 }
 
 CPDF_Dictionary* CPDF_Document::TraversePDFPages(int iPage,
@@ -244,61 +301,10 @@ void CPDF_Document::SetPageObjNum(int iPage, uint32_t objNum) {
   m_PageList[iPage] = objNum;
 }
 
-int CPDF_Document::FindPageIndex(const CPDF_Dictionary* pNode,
-                                 uint32_t* skip_count,
-                                 uint32_t objnum,
-                                 int* index,
-                                 int level) const {
-  if (!pNode->KeyExist("Kids")) {
-    if (objnum == pNode->GetObjNum())
-      return *index;
-
-    if (*skip_count)
-      (*skip_count)--;
-
-    (*index)++;
-    return -1;
-  }
-
-  const CPDF_Array* pKidList = pNode->GetArrayFor("Kids");
-  if (!pKidList)
-    return -1;
-
-  if (level >= kMaxPageLevel)
-    return -1;
-
-  size_t count = pNode->GetIntegerFor("Count");
-  if (count <= *skip_count) {
-    (*skip_count) -= count;
-    (*index) += count;
-    return -1;
-  }
-
-  if (count && count == pKidList->size()) {
-    for (size_t i = 0; i < count; i++) {
-      const CPDF_Reference* pKid = ToReference(pKidList->GetObjectAt(i));
-      if (pKid && pKid->GetRefObjNum() == objnum)
-        return static_cast<int>(*index + i);
-    }
-  }
-
-  for (size_t i = 0; i < pKidList->size(); i++) {
-    const CPDF_Dictionary* pKid = pKidList->GetDictAt(i);
-    if (!pKid || pKid == pNode)
-      continue;
-
-    int found_index = FindPageIndex(pKid, skip_count, objnum, index, level + 1);
-    if (found_index >= 0)
-      return found_index;
-  }
-  return -1;
-}
-
 int CPDF_Document::GetPageIndex(uint32_t objnum) {
-  uint32_t nPages = m_PageList.size();
   uint32_t skip_count = 0;
   bool bSkipped = false;
-  for (uint32_t i = 0; i < nPages; i++) {
+  for (uint32_t i = 0; i < m_PageList.size(); ++i) {
     if (m_PageList[i] == objnum)
       return i;
 
@@ -318,7 +324,9 @@ int CPDF_Document::GetPageIndex(uint32_t objnum) {
   if (!pdfium::IndexInBounds(m_PageList, found_index))
     return -1;
 
-  m_PageList[found_index] = objnum;
+  // Only update |m_PageList| when |objnum| points to a /Page object.
+  if (IsValidPageObject(GetOrParseIndirectObject(objnum)))
+    m_PageList[found_index] = objnum;
   return found_index;
 }
 
@@ -404,7 +412,7 @@ bool CPDF_Document::InsertDeletePDFPage(CPDF_Dictionary* pPages,
       nPagesToGo -= nPages;
       continue;
     }
-    if (pdfium::ContainsKey(*pVisited, pKid))
+    if (pdfium::Contains(*pVisited, pKid))
       return false;
 
     pdfium::ScopedSetInsertion<CPDF_Dictionary*> insertion(pVisited, pKid);
@@ -432,7 +440,7 @@ bool CPDF_Document::InsertNewPage(int iPage, CPDF_Dictionary* pPageDict) {
     CPDF_Array* pPagesList = pPages->GetArrayFor("Kids");
     if (!pPagesList)
       pPagesList = pPages->SetNewFor<CPDF_Array>("Kids");
-    pPagesList->AddNew<CPDF_Reference>(this, pPageDict->GetObjNum());
+    pPagesList->AppendNew<CPDF_Reference>(this, pPageDict->GetObjNum());
     pPages->SetNewFor<CPDF_Number>("Count", nPages + 1);
     pPageDict->SetNewFor<CPDF_Reference>("Parent", this, pPages->GetObjNum());
     ResetTraversal();
@@ -458,6 +466,10 @@ CPDF_Dictionary* CPDF_Document::GetInfo() {
   return m_pInfoDict.Get();
 }
 
+const CPDF_Array* CPDF_Document::GetFileIdentifier() const {
+  return m_pParser ? m_pParser->GetIDArray() : nullptr;
+}
+
 void CPDF_Document::DeletePage(int iPage) {
   CPDF_Dictionary* pPages = GetPagesDict();
   if (!pPages)
@@ -472,6 +484,14 @@ void CPDF_Document::DeletePage(int iPage) {
     return;
 
   m_PageList.erase(m_PageList.begin() + iPage);
+}
+
+void CPDF_Document::SetRootForTesting(CPDF_Dictionary* root) {
+  m_pRootDict.Reset(root);
+}
+
+void CPDF_Document::ResizePageListForTesting(size_t size) {
+  m_PageList.resize(size);
 }
 
 CPDF_Document::StockFontClearer::StockFontClearer(

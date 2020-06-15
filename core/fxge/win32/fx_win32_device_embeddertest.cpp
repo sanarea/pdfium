@@ -75,3 +75,17 @@ TEST_F(CFX_WindowsRenderDeviceTest, GargantuanClipRect) {
   EXPECT_FALSE(
       m_driver->SetClip_PathFill(&path_data, &kIdentityMatrix, FXFILL_WINDING));
 }
+
+TEST_F(CFX_WindowsRenderDeviceTest, GargantuanClipRectWithBaseClip) {
+  CFX_PathData path_data;
+  const FX_RECT kBaseClip(0, 0, 5100, 6600);
+
+  m_driver->SetBaseClip(kBaseClip);
+  path_data.AppendRect(-257698020.0f, -257697252.0f, 257698044.0f,
+                       257698812.0f);
+  path_data.ClosePath();
+  // Use of a reasonable base clip ensures that we avoid getting an error back
+  // from GDI API IntersectClipRect().
+  EXPECT_TRUE(
+      m_driver->SetClip_PathFill(&path_data, &kIdentityMatrix, FXFILL_WINDING));
+}

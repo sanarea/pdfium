@@ -34,6 +34,11 @@ _INCLUDE_ORDER_WARNING = (
     'cppguide.html#Names_and_Order_of_Includes')
 
 
+# Bypass the AUTHORS check for these accounts.
+_KNOWN_ROBOTS = set() | set(
+    '%s@skia-public.iam.gserviceaccount.com' % s for s in ('pdfium-autoroll',))
+
+
 def _CheckUnwantedDependencies(input_api, output_api):
   """Runs checkdeps on #include statements added in this
   change. Breaking - rules is an error, breaking ! rules is a
@@ -294,9 +299,9 @@ def _CheckTestDuplicates(input_api, output_api):
 def _CheckPNGFormat(input_api, output_api):
   """Checks that .png files have a format that will be considered valid by our
   test runners. If a file ends with .png, then it must be of the form
-  NAME_expected(_(win|mac|linux))?.pdf.#.png"""
+  NAME_expected(_(skia|skiapaths))?(_(win|mac|linux))?.pdf.#.png"""
   expected_pattern = input_api.re.compile(
-      r'.+_expected(_(win|mac|linux))?\.pdf\.\d+.png')
+      r'.+_expected(_(skia|skiapaths))?(_(win|mac|linux))?\.pdf\.\d+.png')
   results = []
   for f in input_api.AffectedFiles(include_deletes=False):
     if not f.LocalPath().endswith('.png'):
@@ -308,13 +313,40 @@ def _CheckPNGFormat(input_api, output_api):
   return results
 
 def CheckChangeOnUpload(input_api, output_api):
+  cpp_source_filter = lambda x: input_api.FilterSourceFile(
+      x, white_list=(r'\.(?:c|cc|cpp|h)$',))
+
   results = []
-  results += _CheckUnwantedDependencies(input_api, output_api)
-  results += input_api.canned_checks.CheckPatchFormatted(input_api, output_api)
-  results += input_api.canned_checks.CheckChangeLintsClean(
-      input_api, output_api, None, LINT_FILTERS)
-  results += _CheckIncludeOrder(input_api, output_api)
-  results += _CheckTestDuplicates(input_api, output_api)
-  results += _CheckPNGFormat(input_api, output_api)
+  results.extend(_CheckUnwantedDependencies(input_api, output_api))
+  results.extend(
+      input_api.canned_checks.CheckPatchFormatted(input_api, output_api))
+  results.extend(
+      input_api.canned_checks.CheckChangeLintsClean(input_api, output_api,
+                                                    cpp_source_filter,
+                                                    LINT_FILTERS))
+  results.extend(_CheckIncludeOrder(input_api, output_api))
+  results.extend(_CheckTestDuplicates(input_api, output_api))
+  results.extend(_CheckPNGFormat(input_api, output_api))
+
+  author = input_api.change.author_email
+  if author and author not in _KNOWN_ROBOTS:
+    results.extend(
+        input_api.canned_checks.CheckAuthorizedAuthor(input_api, output_api))
+
+  for f in input_api.AffectedFiles():
+    path, name = input_api.os_path.split(f.LocalPath())
+    if name == 'PRESUBMIT.py':
+      full_path = input_api.os_path.join(input_api.PresubmitLocalPath(), path)
+      test_file = input_api.os_path.join(path, 'PRESUBMIT_test.py')
+      if f.Action() != 'D' and input_api.os_path.exists(test_file):
+        # The PRESUBMIT.py file (and the directory containing it) might
+        # have been affected by being moved or removed, so only try to
+        # run the tests if they still exist.
+        results.extend(
+            input_api.canned_checks.RunUnitTestsInDirectory(
+                input_api,
+                output_api,
+                full_path,
+                whitelist=[r'^PRESUBMIT_test\.py$']))
 
   return results

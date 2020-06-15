@@ -6,8 +6,6 @@
 
 #include "core/fpdfdoc/cpdf_filespec.h"
 
-#include <vector>
-
 #include "build/build_config.h"
 #include "constants/stream_dict_common.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
@@ -17,6 +15,7 @@
 #include "core/fpdfapi/parser/cpdf_string.h"
 #include "core/fpdfapi/parser/fpdf_parser_decode.h"
 #include "core/fxcrt/fx_system.h"
+#include "third_party/base/stl_util.h"
 
 namespace {
 
@@ -63,14 +62,14 @@ CPDF_FileSpec::CPDF_FileSpec(CPDF_Object* pObj)
   ASSERT(m_pObj);
 }
 
-CPDF_FileSpec::~CPDF_FileSpec() {}
+CPDF_FileSpec::~CPDF_FileSpec() = default;
 
 WideString CPDF_FileSpec::DecodeFileName(const WideString& filepath) {
   if (filepath.GetLength() <= 1)
     return WideString();
 
 #if defined(OS_MACOSX)
-  if (filepath.Left(sizeof("/Mac") - 1) == WideStringView(L"/Mac"))
+  if (filepath.First(sizeof("/Mac") - 1) == WideStringView(L"/Mac"))
     return ChangeSlashToPlatform(filepath.c_str() + 1);
   return ChangeSlashToPlatform(filepath.c_str());
 #elif defined(OS_WIN)
@@ -139,7 +138,7 @@ const CPDF_Stream* CPDF_FileSpec::GetFileStream() const {
   // List of keys to check for the file specification string.
   // Follows the same precedence order as GetFileName().
   static constexpr const char* kKeys[] = {"UF", "F", "DOS", "Mac", "Unix"};
-  size_t end = pDict->GetStringFor("FS") == "URL" ? 2 : FX_ArraySize(kKeys);
+  size_t end = pDict->GetStringFor("FS") == "URL" ? 2 : pdfium::size(kKeys);
   for (size_t i = 0; i < end; ++i) {
     ByteString key = kKeys[i];
     if (!pDict->GetUnicodeTextFor(key).IsEmpty()) {
@@ -191,7 +190,7 @@ WideString CPDF_FileSpec::EncodeFileName(const WideString& filepath) {
     return L'/' + ChangeSlashToPDF(filepath.c_str());
   return ChangeSlashToPDF(filepath.c_str());
 #elif defined(OS_MACOSX)
-  if (filepath.Left(sizeof("Mac") - 1).EqualsASCII("Mac"))
+  if (filepath.First(sizeof("Mac") - 1).EqualsASCII("Mac"))
     return L'/' + ChangeSlashToPDF(filepath.c_str());
   return ChangeSlashToPDF(filepath.c_str());
 #else

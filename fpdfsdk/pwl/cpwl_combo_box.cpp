@@ -18,7 +18,6 @@
 #include "fpdfsdk/pwl/cpwl_list_impl.h"
 #include "fpdfsdk/pwl/cpwl_wnd.h"
 #include "public/fpdf_fwlevent.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -35,8 +34,8 @@ CPWL_CBListBox::CPWL_CBListBox(
 
 CPWL_CBListBox::~CPWL_CBListBox() = default;
 
-bool CPWL_CBListBox::OnLButtonUp(const CFX_PointF& point, uint32_t nFlag) {
-  CPWL_Wnd::OnLButtonUp(point, nFlag);
+bool CPWL_CBListBox::OnLButtonUp(uint32_t nFlag, const CFX_PointF& point) {
+  CPWL_Wnd::OnLButtonUp(nFlag, point);
 
   if (!m_bMouseDown)
     return true;
@@ -133,10 +132,10 @@ void CPWL_CBButton::DrawThisAppearance(CFX_RenderDevice* pDevice,
       IsFloatBigger(rectWnd.top - rectWnd.bottom,
                     kComboBoxTriangleHalfLength)) {
     CFX_PathData path;
-    path.AppendPoint(pt1, FXPT_TYPE::MoveTo, false);
-    path.AppendPoint(pt2, FXPT_TYPE::LineTo, false);
-    path.AppendPoint(pt3, FXPT_TYPE::LineTo, false);
-    path.AppendPoint(pt1, FXPT_TYPE::LineTo, false);
+    path.AppendPoint(pt1, FXPT_TYPE::MoveTo);
+    path.AppendPoint(pt2, FXPT_TYPE::LineTo);
+    path.AppendPoint(pt3, FXPT_TYPE::LineTo);
+    path.AppendPoint(pt1, FXPT_TYPE::LineTo);
 
     pDevice->DrawPath(&path, &mtUser2Device, nullptr,
                       PWL_DEFAULT_BLACKCOLOR.ToFXColor(GetTransparency()), 0,
@@ -144,8 +143,8 @@ void CPWL_CBButton::DrawThisAppearance(CFX_RenderDevice* pDevice,
   }
 }
 
-bool CPWL_CBButton::OnLButtonDown(const CFX_PointF& point, uint32_t nFlag) {
-  CPWL_Wnd::OnLButtonDown(point, nFlag);
+bool CPWL_CBButton::OnLButtonDown(uint32_t nFlag, const CFX_PointF& point) {
+  CPWL_Wnd::OnLButtonDown(nFlag, point);
 
   SetCapture();
   if (CPWL_Wnd* pParent = GetParentWindow())
@@ -154,8 +153,8 @@ bool CPWL_CBButton::OnLButtonDown(const CFX_PointF& point, uint32_t nFlag) {
   return true;
 }
 
-bool CPWL_CBButton::OnLButtonUp(const CFX_PointF& point, uint32_t nFlag) {
-  CPWL_Wnd::OnLButtonUp(point, nFlag);
+bool CPWL_CBButton::OnLButtonUp(uint32_t nFlag, const CFX_PointF& point) {
+  CPWL_Wnd::OnLButtonUp(nFlag, point);
 
   ReleaseCapture();
   return true;
@@ -253,13 +252,10 @@ void CPWL_ComboBox::SetEditSelection(int32_t nStartChar, int32_t nEndChar) {
     m_pEdit->SetSelection(nStartChar, nEndChar);
 }
 
-void CPWL_ComboBox::GetEditSelection(int32_t& nStartChar,
-                                     int32_t& nEndChar) const {
-  nStartChar = -1;
-  nEndChar = -1;
-
-  if (m_pEdit)
-    m_pEdit->GetSelection(nStartChar, nEndChar);
+std::pair<int32_t, int32_t> CPWL_ComboBox::GetEditSelection() const {
+  if (!m_pEdit)
+    return std::make_pair(-1, -1);
+  return m_pEdit->GetSelection();
 }
 
 void CPWL_ComboBox::ClearSelection() {
@@ -291,7 +287,7 @@ void CPWL_ComboBox::CreateEdit(const CreateParams& cp) {
   ecp.dwBorderWidth = 0;
   ecp.nBorderStyle = BorderStyle::SOLID;
 
-  auto pEdit = pdfium::MakeUnique<CPWL_Edit>(ecp, CloneAttachedData());
+  auto pEdit = std::make_unique<CPWL_Edit>(ecp, CloneAttachedData());
   m_pEdit = pEdit.get();
   m_pEdit->AttachFFLData(m_pFormFiller.Get());
   AddChild(std::move(pEdit));
@@ -311,7 +307,7 @@ void CPWL_ComboBox::CreateButton(const CreateParams& cp) {
   bcp.nBorderStyle = BorderStyle::BEVELED;
   bcp.eCursorType = FXCT_ARROW;
 
-  auto pButton = pdfium::MakeUnique<CPWL_CBButton>(bcp, CloneAttachedData());
+  auto pButton = std::make_unique<CPWL_CBButton>(bcp, CloneAttachedData());
   m_pButton = pButton.get();
   AddChild(std::move(pButton));
   m_pButton->Realize();
@@ -338,7 +334,7 @@ void CPWL_ComboBox::CreateListBox(const CreateParams& cp) {
   if (cp.sBackgroundColor.nColorType == CFX_Color::kTransparent)
     lcp.sBackgroundColor = PWL_DEFAULT_WHITECOLOR;
 
-  auto pList = pdfium::MakeUnique<CPWL_CBListBox>(lcp, CloneAttachedData());
+  auto pList = std::make_unique<CPWL_CBListBox>(lcp, CloneAttachedData());
   m_pList = pList.get();
   m_pList->AttachFFLData(m_pFormFiller.Get());
   AddChild(std::move(pList));
@@ -536,6 +532,28 @@ bool CPWL_ComboBox::OnChar(uint16_t nChar, uint32_t nFlag) {
 
   if (!m_pEdit)
     return false;
+
+  // In a combo box if the ENTER/SPACE key is pressed, show the combo box
+  // options.
+  switch (nChar) {
+    case FWL_VKEY_Return:
+      SetPopup(!IsPopup());
+      SetSelectText();
+      return true;
+    case FWL_VKEY_Space:
+      // Show the combo box options with space only if the combo box is not
+      // editable
+      if (!HasFlag(PCBS_ALLOWCUSTOMTEXT)) {
+        if (!IsPopup()) {
+          SetPopup(/*bPopUp=*/true);
+          SetSelectText();
+        }
+        return true;
+      }
+      break;
+    default:
+      break;
+  }
 
   m_nSelectItem = -1;
   if (HasFlag(PCBS_ALLOWCUSTOMTEXT))

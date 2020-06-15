@@ -7,61 +7,50 @@
 #ifndef CORE_FXCODEC_JPEG_JPEGMODULE_H_
 #define CORE_FXCODEC_JPEG_JPEGMODULE_H_
 
-#include <csetjmp>
 #include <memory>
 
 #include "build/build_config.h"
-#include "core/fxcodec/codec_module_iface.h"
+#include "third_party/base/optional.h"
 #include "third_party/base/span.h"
+
+#if defined(OS_WIN)
+#include "core/fxcrt/retain_ptr.h"
+#endif
 
 class CFX_DIBBase;
 
 namespace fxcodec {
 
-class CFX_DIBAttribute;
 class ScanlineDecoder;
 
-class JpegModule final : public ModuleIface {
+class JpegModule {
  public:
-  std::unique_ptr<ScanlineDecoder> CreateDecoder(
+  struct JpegImageInfo {
+    int width;
+    int height;
+    int num_components;
+    int bits_per_components;
+    bool color_transform;
+  };
+
+  static std::unique_ptr<ScanlineDecoder> CreateDecoder(
       pdfium::span<const uint8_t> src_span,
       int width,
       int height,
       int nComps,
       bool ColorTransform);
 
-  // ModuleIface:
-  FX_FILESIZE GetAvailInput(Context* pContext) const override;
-  bool Input(Context* pContext,
-             RetainPtr<CFX_CodecMemory> codec_memory,
-             CFX_DIBAttribute* pAttribute) override;
-
-  jmp_buf* GetJumpMark(Context* pContext);
-  bool LoadInfo(pdfium::span<const uint8_t> src_span,
-                int* width,
-                int* height,
-                int* num_components,
-                int* bits_per_components,
-                bool* color_transform);
-
-  std::unique_ptr<Context> Start();
-
-#ifdef PDF_ENABLE_XFA
-  int ReadHeader(Context* pContext,
-                 int* width,
-                 int* height,
-                 int* nComps,
-                 CFX_DIBAttribute* pAttribute);
-#endif  // PDF_ENABLE_XFA
-
-  bool StartScanline(Context* pContext, int down_scale);
-  bool ReadScanline(Context* pContext, uint8_t* dest_buf);
+  static Optional<JpegImageInfo> LoadInfo(pdfium::span<const uint8_t> src_span);
 
 #if defined(OS_WIN)
   static bool JpegEncode(const RetainPtr<CFX_DIBBase>& pSource,
                          uint8_t** dest_buf,
                          size_t* dest_size);
 #endif  // defined(OS_WIN)
+
+  JpegModule() = delete;
+  JpegModule(const JpegModule&) = delete;
+  JpegModule& operator=(const JpegModule&) = delete;
 };
 
 }  // namespace fxcodec

@@ -7,13 +7,12 @@
 #include "core/fpdfapi/parser/cpdf_boolean.h"
 
 #include "core/fxcrt/fx_stream.h"
-#include "third_party/base/ptr_util.h"
 
-CPDF_Boolean::CPDF_Boolean() : m_bValue(false) {}
+CPDF_Boolean::CPDF_Boolean() = default;
 
 CPDF_Boolean::CPDF_Boolean(bool value) : m_bValue(value) {}
 
-CPDF_Boolean::~CPDF_Boolean() {}
+CPDF_Boolean::~CPDF_Boolean() = default;
 
 CPDF_Object::Type CPDF_Boolean::GetType() const {
   return kBoolean;

@@ -16,15 +16,11 @@ source_set("fxjs") {
     "ijs_runtime.h",
   ]
   configs += [ "../:pdfium_core_config" ]
-  deps = [
-    "../core/fxcrt",
-  ]
+  deps = [ "../core/fxcrt" ]
   visibility = [ "../*" ]
 
   if (pdf_enable_v8) {
     sources += [
-      "cfx_globalarray.cpp",
-      "cfx_globalarray.h",
       "cfx_globaldata.cpp",
       "cfx_globaldata.h",
       "cfx_keyvalue.cpp",
@@ -93,6 +89,8 @@ source_set("fxjs") {
       "cjs_zoomtype.h",
       "fx_date_helpers.cpp",
       "fx_date_helpers.h",
+      "fxv8.cpp",
+      "fxv8.h",
       "global_timer.cpp",
       "global_timer.h",
       "js_define.cpp",
@@ -112,14 +110,12 @@ source_set("fxjs") {
       "//v8:v8_libplatform",
     ]
     configs += [ "//v8:external_startup_data" ]
-    public_deps = [
-      "//v8",
-    ]
+    public_deps = [ "//v8" ]
 
     if (pdf_enable_xfa) {
       sources += [
-        "xfa/cfxjse_arguments.cpp",
-        "xfa/cfxjse_arguments.h",
+        "gc/heap.cpp",
+        "gc/heap.h",
         "xfa/cfxjse_class.cpp",
         "xfa/cfxjse_class.h",
         "xfa/cfxjse_context.cpp",
@@ -211,6 +207,7 @@ source_set("fxjs") {
       deps += [
         "../xfa/fgas",
         "../xfa/fxfa/fm2js",
+        "//v8:cppgc",
       ]
     }
   }
@@ -228,9 +225,7 @@ if (pdf_enable_v8) {
       "fx_date_helpers_unittest.cpp",
     ]
     configs = [ "//v8:external_startup_data" ]
-    deps = [
-      ":fxjs",
-    ]
+    deps = [ ":fxjs" ]
     pdfium_root_dir = "../"
   }
 
@@ -245,16 +240,19 @@ if (pdf_enable_v8) {
       "../fpdfsdk",
     ]
     pdfium_root_dir = "../"
-
     if (pdf_enable_xfa) {
       sources += [
+        "gc/heap_embeddertest.cpp",
         "xfa/cfxjse_app_embeddertest.cpp",
         "xfa/cfxjse_formcalc_context_embeddertest.cpp",
         "xfa/cfxjse_value_embeddertest.cpp",
         "xfa/cjx_hostpseudomodel_embeddertest.cpp",
         "xfa/cjx_list_embeddertest.cpp",
       ]
-      deps += [ "../xfa/fxfa" ]
+      deps += [
+        "../xfa/fxfa",
+        "//v8:cppgc",
+      ]
     }
   }
 }

@@ -9,6 +9,7 @@
 
 #include <memory>
 
+#include "core/fxcrt/fx_memory_wrappers.h"
 #include "core/fxcrt/fx_string.h"
 #include "core/fxcrt/fx_system.h"
 #include "core/fxcrt/maybe_owned.h"
@@ -36,9 +37,8 @@ class CPDF_StreamAcc final : public Retainable {
 
   uint8_t* GetData() const;
   uint32_t GetSize() const;
-  pdfium::span<uint8_t> GetSpan() const {
-    return pdfium::make_span(GetData(), GetSize());
-  }
+  pdfium::span<uint8_t> GetSpan();
+  pdfium::span<const uint8_t> GetSpan() const;
   ByteString ComputeDigest() const;
   ByteString GetImageDecoder() const { return m_ImageDecoder; }
   const CPDF_Dictionary* GetImageParam() const { return m_pImageParam.Get(); }

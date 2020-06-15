@@ -8,7 +8,6 @@
 
 #include "core/fxge/cfx_pathdata.h"
 #include "core/fxge/render_defines.h"
-#include "third_party/base/ptr_util.h"
 #include "xfa/fde/cfde_textout.h"
 #include "xfa/fwl/cfwl_checkbox.h"
 #include "xfa/fwl/cfwl_themebackground.h"
@@ -37,20 +36,8 @@ CFWL_CheckBoxTP::~CFWL_CheckBoxTP() {
     m_pCheckPath->Clear();
 }
 
-void CFWL_CheckBoxTP::Initialize() {
-  CFWL_WidgetTP::Initialize();
-  InitTTO();
-}
-
-void CFWL_CheckBoxTP::Finalize() {
-  FinalizeTTO();
-  CFWL_WidgetTP::Finalize();
-}
-
 void CFWL_CheckBoxTP::DrawText(const CFWL_ThemeText& pParams) {
-  if (!m_pTextOut)
-    return;
-
+  EnsureTTOInitialized();
   m_pTextOut->SetTextColor(pParams.m_dwStates & CFWL_PartState_Disabled
                                ? FWLTHEME_CAPACITY_TextDisColor
                                : FWLTHEME_CAPACITY_TextColor);
@@ -172,7 +159,7 @@ void CFWL_CheckBoxTP::DrawSignStar(CXFA_Graphics* pGraphics,
 
 void CFWL_CheckBoxTP::InitCheckPath(float fCheckLen) {
   if (!m_pCheckPath) {
-    m_pCheckPath = pdfium::MakeUnique<CXFA_GEPath>();
+    m_pCheckPath = std::make_unique<CXFA_GEPath>();
 
     float fWidth = kSignPath;
     float fHeight = -kSignPath;
@@ -231,7 +218,7 @@ void CFWL_CheckBoxTP::DrawBackground(const CFWL_ThemeBackground& pParams) {
   if ((pParams.m_dwStates & CFWL_PartState_Checked) ||
       (pParams.m_dwStates & CFWL_PartState_Neutral)) {
     DrawCheckSign(pParams.m_pWidget, pParams.m_pGraphics.Get(),
-                  pParams.m_rtPart, pParams.m_dwStates, pParams.m_matrix);
+                  pParams.m_PartRect, pParams.m_dwStates, pParams.m_matrix);
   }
 }
 

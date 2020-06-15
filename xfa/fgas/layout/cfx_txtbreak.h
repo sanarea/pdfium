@@ -49,6 +49,7 @@ class CFX_TxtBreak final : public CFX_Break {
     CFX_TxtBreak::Engine* pEdtEngine = nullptr;
     WideString wsStr;
     int32_t* pWidths = nullptr;
+    // TODO(thestig): These 2 members probably should be size_t.
     int32_t iStart = 0;
     int32_t iLength = 0;
     RetainPtr<CFGAS_GEFont> pFont;
@@ -81,7 +82,7 @@ class CFX_TxtBreak final : public CFX_Break {
   CFX_BreakType AppendChar_Others(CFX_Char* pCurChar);
 
   void ResetContextCharStyles();
-  bool EndBreak_SplitLine(CFX_BreakLine* pNextLine, bool bAllChars);
+  void EndBreak_SplitLine(CFX_BreakLine* pNextLine, bool bAllChars);
   void EndBreak_BidiLine(std::deque<FX_TPO>* tpos, CFX_BreakType dwStatus);
   void EndBreak_Alignment(const std::deque<FX_TPO>& tpos,
                           bool bAllChars,

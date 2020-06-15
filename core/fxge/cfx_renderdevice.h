@@ -29,6 +29,9 @@ struct CFX_Color;
 
 enum class BorderStyle { SOLID, DASH, BEVELED, INSET, UNDERLINE };
 
+// Base class for all render devices. Derived classes must call
+// SetDeviceDriver() to fully initialize the class. Until then, class methods
+// are not safe to call, or may return invalid results.
 class CFX_RenderDevice {
  public:
   class StateRestorer {
@@ -40,7 +43,6 @@ class CFX_RenderDevice {
     UnownedPtr<CFX_RenderDevice> m_pDevice;
   };
 
-  CFX_RenderDevice();
   virtual ~CFX_RenderDevice();
 
   static CFX_Matrix GetFlipMatrix(float width,
@@ -48,7 +50,6 @@ class CFX_RenderDevice {
                                   float left,
                                   float top);
 
-  void SetDeviceDriver(std::unique_ptr<RenderDeviceDriverIface> pDriver);
   RenderDeviceDriverIface* GetDeviceDriver() const {
     return m_pDeviceDriver.get();
   }
@@ -67,13 +68,14 @@ class CFX_RenderDevice {
                               int width,
                               int height) const;
   const FX_RECT& GetClipBox() const { return m_ClipBox; }
-  bool SetClip_Rect(const FX_RECT& pRect);
+  void SetBaseClip(const FX_RECT& rect);
   bool SetClip_PathFill(const CFX_PathData* pPathData,
                         const CFX_Matrix* pObject2Device,
                         int fill_mode);
   bool SetClip_PathStroke(const CFX_PathData* pPathData,
                           const CFX_Matrix* pObject2Device,
                           const CFX_GraphStateData* pGraphState);
+  bool SetClip_Rect(const FX_RECT& pRect);
   bool DrawPath(const CFX_PathData* pPathData,
                 const CFX_Matrix* pObject2Device,
                 const CFX_GraphStateData* pGraphState,
@@ -221,6 +223,11 @@ class CFX_RenderDevice {
   void Flush(bool release);
 #endif
 
+ protected:
+  CFX_RenderDevice();
+
+  void SetDeviceDriver(std::unique_ptr<RenderDeviceDriverIface> pDriver);
+
  private:
   void InitDeviceInfo();
   void UpdateClipBox();
@@ -245,7 +252,7 @@ class CFX_RenderDevice {
   int m_Height = 0;
   int m_bpp = 0;
   int m_RenderCaps = 0;
-  DeviceType m_DeviceType = DeviceType::kUnknown;
+  DeviceType m_DeviceType = DeviceType::kDisplay;
   FX_RECT m_ClipBox;
   std::unique_ptr<RenderDeviceDriverIface> m_pDeviceDriver;
 };

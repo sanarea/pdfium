@@ -9,7 +9,6 @@
 #include "fxjs/cfx_v8_unittest.h"
 #include "fxjs/cjs_object.h"
 #include "testing/gtest/include/gtest/gtest.h"
-#include "third_party/base/ptr_util.h"
 
 class FXJSEngineUnitTest : public FXV8UnitTest {
  public:
@@ -19,7 +18,7 @@ class FXJSEngineUnitTest : public FXV8UnitTest {
   void SetUp() override {
     FXV8UnitTest::SetUp();
     FXJS_Initialize(1, isolate());
-    engine_ = pdfium::MakeUnique<CFXJS_Engine>(isolate());
+    engine_ = std::make_unique<CFXJS_Engine>(isolate());
   }
 
   void TearDown() override { FXJS_Release(); }
@@ -40,28 +39,30 @@ TEST_F(FXJSEngineUnitTest, GC) {
   v8::HandleScope handle_scope(isolate());
 
   // Object: 0
-  engine()->DefineObj("perm", FXJSOBJTYPE_DYNAMIC,
-                      [](CFXJS_Engine* pEngine, v8::Local<v8::Object> obj) {
-                        pEngine->SetObjectPrivate(
-                            obj, pdfium::MakeUnique<CJS_Object>(obj, nullptr));
-                        perm_created = true;
-                      },
-                      [](v8::Local<v8::Object> obj) {
-                        perm_destroyed = true;
-                        CFXJS_Engine::SetObjectPrivate(obj, nullptr);
-                      });
+  engine()->DefineObj(
+      "perm", FXJSOBJTYPE_DYNAMIC,
+      [](CFXJS_Engine* pEngine, v8::Local<v8::Object> obj) {
+        pEngine->SetObjectPrivate(obj,
+                                  std::make_unique<CJS_Object>(obj, nullptr));
+        perm_created = true;
+      },
+      [](v8::Local<v8::Object> obj) {
+        perm_destroyed = true;
+        CFXJS_Engine::SetObjectPrivate(obj, nullptr);
+      });
 
   // Object: 1
-  engine()->DefineObj("temp", FXJSOBJTYPE_DYNAMIC,
-                      [](CFXJS_Engine* pEngine, v8::Local<v8::Object> obj) {
-                        pEngine->SetObjectPrivate(
-                            obj, pdfium::MakeUnique<CJS_Object>(obj, nullptr));
-                        temp_created = true;
-                      },
-                      [](v8::Local<v8::Object> obj) {
-                        temp_destroyed = true;
-                        CFXJS_Engine::SetObjectPrivate(obj, nullptr);
-                      });
+  engine()->DefineObj(
+      "temp", FXJSOBJTYPE_DYNAMIC,
+      [](CFXJS_Engine* pEngine, v8::Local<v8::Object> obj) {
+        pEngine->SetObjectPrivate(obj,
+                                  std::make_unique<CJS_Object>(obj, nullptr));
+        temp_created = true;
+      },
+      [](v8::Local<v8::Object> obj) {
+        temp_destroyed = true;
+        CFXJS_Engine::SetObjectPrivate(obj, nullptr);
+      });
 
   engine()->InitializeEngine();
 

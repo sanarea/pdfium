@@ -20,7 +20,7 @@
 
 CXFA_FFText::CXFA_FFText(CXFA_Node* pNode) : CXFA_FFWidget(pNode) {}
 
-CXFA_FFText::~CXFA_FFText() {}
+CXFA_FFText::~CXFA_FFText() = default;
 
 void CXFA_FFText::RenderWidget(CXFA_Graphics* pGS,
                                const CFX_Matrix& matrix,
@@ -115,8 +115,9 @@ bool CXFA_FFText::AcceptsFocusOnButtonDown(uint32_t dwFlags,
   return true;
 }
 
-void CXFA_FFText::OnLButtonDown(uint32_t dwFlags, const CFX_PointF& point) {
+bool CXFA_FFText::OnLButtonDown(uint32_t dwFlags, const CFX_PointF& point) {
   SetButtonDown(true);
+  return true;
 }
 
 bool CXFA_FFText::OnMouseMove(uint32_t dwFlags, const CFX_PointF& point) {
@@ -137,7 +138,7 @@ bool CXFA_FFText::OnLButtonUp(uint32_t dwFlags, const CFX_PointF& point) {
   return true;
 }
 
-FWL_WidgetHit CXFA_FFText::OnHitTest(const CFX_PointF& point) {
+FWL_WidgetHit CXFA_FFText::HitTest(const CFX_PointF& point) {
   if (!GetRectWithoutRotate().Contains(point))
     return FWL_WidgetHit::Unknown;
   if (!GetLinkURLAtPoint(point))

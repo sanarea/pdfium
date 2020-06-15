@@ -7,6 +7,7 @@
 #include "core/fxge/win32/cfx_psrenderer.h"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <sstream>
 #include <utility>
@@ -22,7 +23,6 @@
 #include "core/fxge/fx_dib.h"
 #include "core/fxge/text_char_pos.h"
 #include "core/fxge/win32/cpsoutput.h"
-#include "third_party/base/ptr_util.h"
 
 struct PSGlyph {
   UnownedPtr<CFX_Font> m_pFont;
@@ -249,7 +249,7 @@ void CFX_PSRenderer::SetGraphState(const CFX_GraphStateData* pGraphState) {
   std::ostringstream buf;
   if (!m_bGraphStateSet ||
       m_CurGraphState.m_LineCap != pGraphState->m_LineCap) {
-    buf << pGraphState->m_LineCap << " J\n";
+    buf << static_cast<int>(pGraphState->m_LineCap) << " J\n";
   }
   if (!m_bGraphStateSet ||
       m_CurGraphState.m_DashArray != pGraphState->m_DashArray) {
@@ -260,7 +260,7 @@ void CFX_PSRenderer::SetGraphState(const CFX_GraphStateData* pGraphState) {
   }
   if (!m_bGraphStateSet ||
       m_CurGraphState.m_LineJoin != pGraphState->m_LineJoin) {
-    buf << pGraphState->m_LineJoin << " j\n";
+    buf << static_cast<int>(pGraphState->m_LineJoin) << " j\n";
   }
   if (!m_bGraphStateSet ||
       m_CurGraphState.m_LineWidth != pGraphState->m_LineWidth) {
@@ -493,7 +493,7 @@ void CFX_PSRenderer::FindPSFontGlyph(CFX_GlyphCache* pGlyphCache,
   }
 
   if (m_PSFontList.empty() || m_PSFontList.back()->m_nGlyphs == 256) {
-    m_PSFontList.push_back(pdfium::MakeUnique<CPSFont>());
+    m_PSFontList.push_back(std::make_unique<CPSFont>());
     m_PSFontList.back()->m_nGlyphs = 0;
     std::ostringstream buf;
     buf << "8 dict begin/FontType 3 def/FontMatrix[1 0 0 1 0 0]def\n"

@@ -385,6 +385,17 @@ void color_sycc_to_rgb(opj_image_t* img) {
 }  // namespace
 
 // static
+std::unique_ptr<CJPX_Decoder> CJPX_Decoder::Create(
+    pdfium::span<const uint8_t> src_span,
+    CJPX_Decoder::ColorSpaceOption option) {
+  // Private ctor.
+  auto decoder = pdfium::WrapUnique(new CJPX_Decoder(option));
+  if (!decoder->Init(src_span))
+    return nullptr;
+  return decoder;
+}
+
+// static
 void CJPX_Decoder::Sycc420ToRgbForTesting(opj_image_t* img) {
   sycc420_to_rgb(img);
 }
@@ -409,8 +420,7 @@ bool CJPX_Decoder::Init(pdfium::span<const uint8_t> src_data) {
 
   m_Image = nullptr;
   m_SrcData = src_data;
-  m_DecodeData =
-      pdfium::MakeUnique<DecodeData>(src_data.data(), src_data.size());
+  m_DecodeData = std::make_unique<DecodeData>(src_data.data(), src_data.size());
   m_Stream = fx_opj_stream_create_memory_stream(m_DecodeData.get());
   if (!m_Stream)
     return false;
@@ -488,29 +498,25 @@ bool CJPX_Decoder::StartDecode() {
   return true;
 }
 
-void CJPX_Decoder::GetInfo(uint32_t* width,
-                           uint32_t* height,
-                           uint32_t* components) {
-  *width = m_Image->x1;
-  *height = m_Image->y1;
-  *components = m_Image->numcomps;
+CJPX_Decoder::JpxImageInfo CJPX_Decoder::GetInfo() const {
+  return {m_Image->x1, m_Image->y1, m_Image->numcomps, m_Image->color_space};
 }
 
-bool CJPX_Decoder::Decode(uint8_t* dest_buf,
-                          uint32_t pitch,
-                          const std::vector<uint8_t>& offsets) {
+bool CJPX_Decoder::Decode(uint8_t* dest_buf, uint32_t pitch, bool swap_rgb) {
   if (m_Image->comps[0].w != m_Image->x1 || m_Image->comps[0].h != m_Image->y1)
     return false;
 
-  if (pitch<(m_Image->comps[0].w * 8 * m_Image->numcomps + 31)>> 5 << 2) {
+  if (pitch<(m_Image->comps[0].w * 8 * m_Image->numcomps + 31)>> 5 << 2)
     return false;
-  }
+
+  if (swap_rgb && m_Image->numcomps < 3)
+    return false;
 
   memset(dest_buf, 0xff, m_Image->y1 * pitch);
   std::vector<uint8_t*> channel_bufs(m_Image->numcomps);
   std::vector<int> adjust_comps(m_Image->numcomps);
   for (uint32_t i = 0; i < m_Image->numcomps; i++) {
-    channel_bufs[i] = dest_buf + offsets[i];
+    channel_bufs[i] = dest_buf + i;
     adjust_comps[i] = m_Image->comps[i].prec - 8;
     if (i > 0) {
       if (m_Image->comps[i].dx != m_Image->comps[i - 1].dx ||
@@ -520,6 +526,9 @@ bool CJPX_Decoder::Decode(uint8_t* dest_buf,
       }
     }
   }
+  if (swap_rgb)
+    std::swap(channel_bufs[0], channel_bufs[2]);
+
   uint32_t width = m_Image->comps[0].w;
   uint32_t height = m_Image->comps[0].h;
   for (uint32_t channel = 0; channel < m_Image->numcomps; ++channel) {

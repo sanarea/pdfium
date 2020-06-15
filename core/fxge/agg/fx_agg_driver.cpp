@@ -17,7 +17,7 @@
 #include "core/fxge/dib/cfx_dibitmap.h"
 #include "core/fxge/dib/cfx_imagerenderer.h"
 #include "core/fxge/dib/cfx_imagestretcher.h"
-#include "third_party/base/ptr_util.h"
+#include "third_party/base/span.h"
 #include "third_party/base/stl_util.h"
 
 // Ignore fallthrough warnings in agg23 headers.
@@ -1088,29 +1088,29 @@ class renderer_scanline_aa_offset {
 
 void CAgg_PathData::BuildPath(const CFX_PathData* pPathData,
                               const CFX_Matrix* pObject2Device) {
-  const std::vector<FX_PATHPOINT>& pPoints = pPathData->GetPoints();
-  for (size_t i = 0; i < pPoints.size(); i++) {
-    CFX_PointF pos = pPoints[i].m_Point;
+  pdfium::span<const FX_PATHPOINT> points = pPathData->GetPoints();
+  for (size_t i = 0; i < points.size(); ++i) {
+    CFX_PointF pos = points[i].m_Point;
     if (pObject2Device)
       pos = pObject2Device->Transform(pos);
 
     pos = HardClip(pos);
-    FXPT_TYPE point_type = pPoints[i].m_Type;
+    FXPT_TYPE point_type = points[i].m_Type;
     if (point_type == FXPT_TYPE::MoveTo) {
       m_PathData.move_to(pos.x, pos.y);
     } else if (point_type == FXPT_TYPE::LineTo) {
-      if (i > 0 && pPoints[i - 1].IsTypeAndOpen(FXPT_TYPE::MoveTo) &&
-          (i == pPoints.size() - 1 ||
-           pPoints[i + 1].IsTypeAndOpen(FXPT_TYPE::MoveTo)) &&
-          pPoints[i].m_Point == pPoints[i - 1].m_Point) {
+      if (i > 0 && points[i - 1].IsTypeAndOpen(FXPT_TYPE::MoveTo) &&
+          (i == points.size() - 1 ||
+           points[i + 1].IsTypeAndOpen(FXPT_TYPE::MoveTo)) &&
+          points[i].m_Point == points[i - 1].m_Point) {
         pos.x += 1;
       }
       m_PathData.line_to(pos.x, pos.y);
     } else if (point_type == FXPT_TYPE::BezierTo) {
-      if (i > 0 && i + 2 < pPoints.size()) {
-        CFX_PointF pos0 = pPoints[i - 1].m_Point;
-        CFX_PointF pos2 = pPoints[i + 1].m_Point;
-        CFX_PointF pos3 = pPoints[i + 2].m_Point;
+      if (i > 0 && i + 2 < points.size()) {
+        CFX_PointF pos0 = points[i - 1].m_Point;
+        CFX_PointF pos2 = points[i + 1].m_Point;
+        CFX_PointF pos3 = points[i + 2].m_Point;
         if (pObject2Device) {
           pos0 = pObject2Device->Transform(pos0);
           pos2 = pObject2Device->Transform(pos2);
@@ -1125,7 +1125,7 @@ void CAgg_PathData::BuildPath(const CFX_PathData* pPathData,
         m_PathData.add_path_curve(curve);
       }
     }
-    if (pPoints[i].m_CloseFigure)
+    if (points[i].m_CloseFigure)
       m_PathData.end_poly();
   }
 }
@@ -1139,6 +1139,7 @@ CFX_AggDeviceDriver::CFX_AggDeviceDriver(
       m_bRgbByteOrder(bRgbByteOrder),
       m_bGroupKnockout(bGroupKnockout),
       m_pBackdropBitmap(pBackdropBitmap) {
+  ASSERT(m_pBitmap);
   InitPlatform();
 }
 
@@ -1204,7 +1205,7 @@ int CFX_AggDeviceDriver::GetDeviceCaps(int caps_id) const {
 void CFX_AggDeviceDriver::SaveState() {
   std::unique_ptr<CFX_ClipRgn> pClip;
   if (m_pClipRgn)
-    pClip = pdfium::MakeUnique<CFX_ClipRgn>(*m_pClipRgn);
+    pClip = std::make_unique<CFX_ClipRgn>(*m_pClipRgn);
   m_StateStack.push_back(std::move(pClip));
 }
 
@@ -1216,7 +1217,7 @@ void CFX_AggDeviceDriver::RestoreState(bool bKeepSaved) {
 
   if (bKeepSaved) {
     if (m_StateStack.back())
-      m_pClipRgn = pdfium::MakeUnique<CFX_ClipRgn>(*m_StateStack.back());
+      m_pClipRgn = std::make_unique<CFX_ClipRgn>(*m_StateStack.back());
   } else {
     m_pClipRgn = std::move(m_StateStack.back());
     m_StateStack.pop_back();
@@ -1253,13 +1254,14 @@ bool CFX_AggDeviceDriver::SetClip_PathFill(const CFX_PathData* pPathData,
 
   m_FillFlags = fill_mode;
   if (!m_pClipRgn) {
-    m_pClipRgn = pdfium::MakeUnique<CFX_ClipRgn>(
+    m_pClipRgn = std::make_unique<CFX_ClipRgn>(
         GetDeviceCaps(FXDC_PIXEL_WIDTH), GetDeviceCaps(FXDC_PIXEL_HEIGHT));
   }
   size_t size = pPathData->GetPoints().size();
   if (size == 5 || size == 4) {
-    CFX_FloatRect rectf;
-    if (pPathData->IsRect(pObject2Device, &rectf)) {
+    Optional<CFX_FloatRect> maybe_rectf = pPathData->GetRect(pObject2Device);
+    if (maybe_rectf.has_value()) {
+      CFX_FloatRect& rectf = maybe_rectf.value();
       rectf.Intersect(CFX_FloatRect(
           0, 0, static_cast<float>(GetDeviceCaps(FXDC_PIXEL_WIDTH)),
           static_cast<float>(GetDeviceCaps(FXDC_PIXEL_HEIGHT))));
@@ -1286,7 +1288,7 @@ bool CFX_AggDeviceDriver::SetClip_PathStroke(
     const CFX_Matrix* pObject2Device,
     const CFX_GraphStateData* pGraphState) {
   if (!m_pClipRgn) {
-    m_pClipRgn = pdfium::MakeUnique<CFX_ClipRgn>(
+    m_pClipRgn = std::make_unique<CFX_ClipRgn>(
         GetDeviceCaps(FXDC_PIXEL_WIDTH), GetDeviceCaps(FXDC_PIXEL_HEIGHT));
   }
   CAgg_PathData path_data;
@@ -1475,7 +1477,7 @@ bool CFX_AggDeviceDriver::GetClipBox(FX_RECT* pRect) {
 bool CFX_AggDeviceDriver::GetDIBits(const RetainPtr<CFX_DIBitmap>& pBitmap,
                                     int left,
                                     int top) {
-  if (!m_pBitmap || !m_pBitmap->GetBuffer())
+  if (!m_pBitmap->GetBuffer())
     return true;
 
   FX_RECT rect(left, top, left + pBitmap->GetWidth(),
@@ -1573,7 +1575,7 @@ bool CFX_AggDeviceDriver::StartDIBits(
   if (!m_pBitmap->GetBuffer())
     return true;
 
-  *handle = pdfium::MakeUnique<CFX_ImageRenderer>(
+  *handle = std::make_unique<CFX_ImageRenderer>(
       m_pBitmap, m_pClipRgn.get(), pSource, bitmap_alpha, argb, matrix, options,
       m_bRgbByteOrder);
   return true;
@@ -1581,13 +1583,13 @@ bool CFX_AggDeviceDriver::StartDIBits(
 
 bool CFX_AggDeviceDriver::ContinueDIBits(CFX_ImageRenderer* pHandle,
                                          PauseIndicatorIface* pPause) {
-  return m_pBitmap->GetBuffer() ? pHandle->Continue(pPause) : true;
+  return !m_pBitmap->GetBuffer() || pHandle->Continue(pPause);
 }
 
 #ifndef _SKIA_SUPPORT_
 CFX_DefaultRenderDevice::CFX_DefaultRenderDevice() {}
 
-CFX_DefaultRenderDevice::~CFX_DefaultRenderDevice() {}
+CFX_DefaultRenderDevice::~CFX_DefaultRenderDevice() = default;
 
 bool CFX_DefaultRenderDevice::Attach(
     const RetainPtr<CFX_DIBitmap>& pBitmap,
@@ -1598,7 +1600,7 @@ bool CFX_DefaultRenderDevice::Attach(
     return false;
 
   SetBitmap(pBitmap);
-  SetDeviceDriver(pdfium::MakeUnique<CFX_AggDeviceDriver>(
+  SetDeviceDriver(std::make_unique<CFX_AggDeviceDriver>(
       pBitmap, bRgbByteOrder, pBackdropBitmap, bGroupKnockout));
   return true;
 }
@@ -1613,7 +1615,7 @@ bool CFX_DefaultRenderDevice::Create(
     return false;
 
   SetBitmap(pBitmap);
-  SetDeviceDriver(pdfium::MakeUnique<CFX_AggDeviceDriver>(
+  SetDeviceDriver(std::make_unique<CFX_AggDeviceDriver>(
       pBitmap, false, pBackdropBitmap, false));
   return true;
 }

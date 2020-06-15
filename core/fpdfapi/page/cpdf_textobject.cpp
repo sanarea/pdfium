@@ -11,7 +11,6 @@
 
 #include "core/fpdfapi/font/cpdf_cidfont.h"
 #include "core/fpdfapi/font/cpdf_font.h"
-#include "third_party/base/ptr_util.h"
 
 #define ISLATINWORD(u) (u != 0x20 && u <= 0x28FF)
 
@@ -155,7 +154,7 @@ WideString CPDF_TextObject::GetWordString(int nWordIndex) const {
 }
 
 std::unique_ptr<CPDF_TextObject> CPDF_TextObject::Clone() const {
-  auto obj = pdfium::MakeUnique<CPDF_TextObject>();
+  auto obj = std::make_unique<CPDF_TextObject>();
   obj->CopyData(this);
   obj->m_CharCodes = m_CharCodes;
   obj->m_CharPos = m_CharPos;
@@ -341,14 +340,6 @@ CFX_PointF CPDF_TextObject::CalcPositionData(float horz_scale) {
   m_Rect.bottom -= half_width;
 
   return ret;
-}
-
-void CPDF_TextObject::SetPosition(float x, float y) {
-  float dx = x - m_Pos.x;
-  float dy = y - m_Pos.y;
-  m_Pos.x = x;
-  m_Pos.y = y;
-  m_Rect.Translate(dx, dy);
 }
 
 void CPDF_TextObject::RecalcPositionData() {

@@ -24,7 +24,6 @@
 #include "core/fxge/render_defines.h"
 #include "core/fxge/scoped_font_transform.h"
 #include "third_party/base/numerics/safe_math.h"
-#include "third_party/base/ptr_util.h"
 
 #if defined _SKIA_SUPPORT_ || _SKIA_SUPPORT_PATHS_
 #include "third_party/skia/include/core/SkStream.h"
@@ -143,22 +142,25 @@ std::unique_ptr<CFX_GlyphBitmap> CFX_GlyphCache::RenderGlyph(
                             pFont->GetSubstFont()->m_Weight);
     }
   }
+
   ScopedFontTransform scoped_transform(GetFace(), &ft_matrix);
-  int load_flags = (GetFaceRec()->face_flags & FT_FACE_FLAG_SFNT)
-                       ? FT_LOAD_NO_BITMAP
-                       : (FT_LOAD_NO_BITMAP | FT_LOAD_NO_HINTING);
+  int load_flags = FT_LOAD_NO_BITMAP | FT_LOAD_PEDANTIC;
+  if (!(GetFaceRec()->face_flags & FT_FACE_FLAG_SFNT))
+    load_flags |= FT_LOAD_NO_HINTING;
   int error = FT_Load_Glyph(GetFaceRec(), glyph_index, load_flags);
   if (error) {
     // if an error is returned, try to reload glyphs without hinting.
-    if (load_flags & FT_LOAD_NO_HINTING || load_flags & FT_LOAD_NO_SCALE)
+    if (load_flags & FT_LOAD_NO_HINTING)
       return nullptr;
 
     load_flags |= FT_LOAD_NO_HINTING;
+    load_flags &= ~FT_LOAD_PEDANTIC;
     error = FT_Load_Glyph(GetFaceRec(), glyph_index, load_flags);
     if (error)
       return nullptr;
   }
-  int weight = 0;
+
+  int weight;
   if (bUseCJKSubFont)
     weight = pSubstFont->m_WeightCJK;
   else
@@ -191,9 +193,9 @@ std::unique_ptr<CFX_GlyphBitmap> CFX_GlyphCache::RenderGlyph(
   if (bmwidth > kMaxGlyphDimension || bmheight > kMaxGlyphDimension)
     return nullptr;
   int dib_width = bmwidth;
-  auto pGlyphBitmap = pdfium::MakeUnique<CFX_GlyphBitmap>(
-      FXFT_Get_Glyph_BitmapLeft(GetFaceRec()),
-      FXFT_Get_Glyph_BitmapTop(GetFaceRec()));
+  auto pGlyphBitmap =
+      std::make_unique<CFX_GlyphBitmap>(FXFT_Get_Glyph_BitmapLeft(GetFaceRec()),
+                                        FXFT_Get_Glyph_BitmapTop(GetFaceRec()));
   pGlyphBitmap->GetBitmap()->Create(
       dib_width, bmheight,
       anti_alias == FT_RENDER_MODE_MONO ? FXDIB_1bppMask : FXDIB_8bppMask);
@@ -232,7 +234,7 @@ const CFX_PathData* CFX_GlyphCache::LoadGlyphPath(const CFX_Font* pFont,
   const auto* pSubstFont = pFont->GetSubstFont();
   int weight = pSubstFont ? pSubstFont->m_Weight : 0;
   int angle = pSubstFont ? pSubstFont->m_ItalicAngle : 0;
-  bool vertical = pSubstFont ? pFont->IsVertical() : false;
+  bool vertical = pSubstFont && pFont->IsVertical();
   const PathMapKey key =
       std::make_tuple(glyph_index, dest_width, weight, angle, vertical);
   auto it = m_PathMap.find(key);
@@ -317,14 +319,14 @@ CFX_TypeFace* CFX_GlyphCache::GetDeviceCache(const CFX_Font* pFont) {
   if (!m_pTypeface) {
     pdfium::span<const uint8_t> span = pFont->GetFontSpan();
     m_pTypeface = SkTypeface::MakeFromStream(
-        pdfium::MakeUnique<SkMemoryStream>(span.data(), span.size()));
+        std::make_unique<SkMemoryStream>(span.data(), span.size()));
   }
 #if defined(OS_WIN)
   if (!m_pTypeface) {
     sk_sp<SkFontMgr> customMgr(SkFontMgr_New_Custom_Empty());
     pdfium::span<const uint8_t> span = pFont->GetFontSpan();
     m_pTypeface = customMgr->makeFromStream(
-        pdfium::MakeUnique<SkMemoryStream>(span.data(), span.size()));
+        std::make_unique<SkMemoryStream>(span.data(), span.size()));
   }
 #endif  // defined(OS_WIN)
   return m_pTypeface.get();

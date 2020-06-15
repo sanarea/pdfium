@@ -11,7 +11,6 @@
 #include <utility>
 
 #include "core/fxge/text_char_pos.h"
-#include "third_party/base/ptr_util.h"
 #include "xfa/fde/cfde_textout.h"
 #include "xfa/fde/cfde_wordbreak_data.h"
 #include "xfa/fgas/font/cfgas_gefont.h"
@@ -98,20 +97,6 @@ class ReplaceOperation final : public CFDE_TextEditEngine::Operation {
   DeleteOperation delete_op_;
 };
 
-bool CheckStateChangeForWordBreak(WordBreakProperty from,
-                                  WordBreakProperty to) {
-  ASSERT(static_cast<int>(from) < 13);
-
-  return !!(gs_FX_WordBreak_Table[static_cast<int>(from)] &
-            static_cast<uint16_t>(1 << static_cast<int>(to)));
-}
-
-WordBreakProperty GetWordBreakProperty(wchar_t wcCodePoint) {
-  uint8_t dwProperty = gs_FX_WordBreak_CodePointProperties[wcCodePoint >> 1];
-  return static_cast<WordBreakProperty>((wcCodePoint & 1) ? (dwProperty & 0x0F)
-                                                          : (dwProperty >> 4));
-}
-
 int GetBreakFlagsFor(WordBreakProperty current, WordBreakProperty next) {
   if (current == WordBreakProperty::kMidLetter) {
     if (next == WordBreakProperty::kALetter)
@@ -169,7 +154,7 @@ CFDE_TextEditEngine::CFDE_TextEditEngine()
   text_break_.SetTabWidth(36);
 }
 
-CFDE_TextEditEngine::~CFDE_TextEditEngine() {}
+CFDE_TextEditEngine::~CFDE_TextEditEngine() = default;
 
 void CFDE_TextEditEngine::Clear() {
   text_length_ = 0;
@@ -223,7 +208,7 @@ size_t CFDE_TextEditEngine::CountCharsExceedingSize(const WideString& text,
   if (!limit_horizontal_area_ && !limit_vertical_area_)
     return 0;
 
-  auto text_out = pdfium::MakeUnique<CFDE_TextOut>();
+  auto text_out = std::make_unique<CFDE_TextOut>();
   text_out->SetLineSpace(line_spacing_);
   text_out->SetFont(font_);
   text_out->SetFontSize(font_size_);
@@ -256,7 +241,7 @@ size_t CFDE_TextEditEngine::CountCharsExceedingSize(const WideString& text,
     ++chars_exceeding_size;
 
     --length;
-    temp = temp.Left(length);
+    temp = temp.First(length);
   }
 
   return chars_exceeding_size;
@@ -266,7 +251,7 @@ void CFDE_TextEditEngine::Insert(size_t idx,
                                  const WideString& request_text,
                                  RecordOperation add_operation) {
   WideString text = request_text;
-  if (text.GetLength() == 0)
+  if (text.IsEmpty())
     return;
 
   idx = std::min(idx, text_length_);
@@ -308,12 +293,17 @@ void CFDE_TextEditEngine::Insert(size_t idx,
   // engine. Otherwise, if you enter 123456789 for an SSN into a field
   // with a 9 character limit and we reformat to 123-45-6789 we'll truncate
   // the 89 when inserting into the text edit. See https://crbug.com/pdfium/1089
-  if (has_character_limit_ && add_operation != RecordOperation::kSkipNotify &&
-      text_length_ + length > character_limit_) {
-    exceeded_limit = true;
-    length = character_limit_ - text_length_;
+  if (has_character_limit_ && text_length_ + length > character_limit_) {
+    if (add_operation == RecordOperation::kSkipNotify) {
+      // Raise the limit to allow subsequent changes to expanded text.
+      character_limit_ = text_length_ + length;
+    } else {
+      // Trucate the text to comply with the limit.
+      CHECK(text_length_ <= character_limit_);
+      length = character_limit_ - text_length_;
+      exceeded_limit = true;
+    }
   }
-
   AdjustGap(idx, length);
 
   if (validation_enabled_ || limit_horizontal_area_ || limit_vertical_area_) {
@@ -353,7 +343,7 @@ void CFDE_TextEditEngine::Insert(size_t idx,
 
   if (add_operation == RecordOperation::kInsertRecord) {
     AddOperationRecord(
-        pdfium::MakeUnique<InsertOperation>(this, gap_position_, text));
+        std::make_unique<InsertOperation>(this, gap_position_, text));
   }
 
   WideString previous_text;
@@ -639,6 +629,7 @@ void CFDE_TextEditEngine::SetHasCharacterLimit(bool limit) {
     return;
 
   has_character_limit_ = limit;
+  character_limit_ = std::max(character_limit_, text_length_);
   if (is_comb_text_)
     SetCombTextWidth();
 
@@ -651,7 +642,7 @@ void CFDE_TextEditEngine::SetCharacterLimit(size_t limit) {
 
   ClearOperationRecords();
 
-  character_limit_ = limit;
+  character_limit_ = std::max(limit, text_length_);
   if (is_comb_text_)
     SetCombTextWidth();
 
@@ -687,10 +678,6 @@ void CFDE_TextEditEngine::SetTabWidth(float width) {
     return;
 
   is_dirty_ = true;
-}
-
-float CFDE_TextEditEngine::GetFontAscent() const {
-  return (static_cast<float>(font_->GetAscent()) * font_size_) / 1000;
 }
 
 void CFDE_TextEditEngine::SetAlignment(uint32_t alignment) {
@@ -867,8 +854,7 @@ WideString CFDE_TextEditEngine::Delete(size_t start_idx,
   ret += WideStringView(content_.data() + start_idx, length);
 
   if (add_operation == RecordOperation::kInsertRecord) {
-    AddOperationRecord(
-        pdfium::MakeUnique<DeleteOperation>(this, start_idx, ret));
+    AddOperationRecord(std::make_unique<DeleteOperation>(this, start_idx, ret));
   }
 
   WideString previous_text = GetText();
@@ -915,7 +901,7 @@ void CFDE_TextEditEngine::ReplaceSelectedText(const WideString& requested_rep) {
   Insert(gap_position_, rep, RecordOperation::kSkipRecord);
 
   AddOperationRecord(
-      pdfium::MakeUnique<ReplaceOperation>(this, start_idx, txt, rep));
+      std::make_unique<ReplaceOperation>(this, start_idx, txt, rep));
 }
 
 WideString CFDE_TextEditEngine::GetText() const {
@@ -1098,7 +1084,7 @@ void CFDE_TextEditEngine::RebuildPieces() {
   size_t current_piece_start = 0;
   float current_line_start = 0;
 
-  auto iter = pdfium::MakeUnique<CFDE_TextEditEngine::Iterator>(this);
+  auto iter = std::make_unique<CFDE_TextEditEngine::Iterator>(this);
   while (!iter->IsEOF(false)) {
     iter->Next(false);
 
@@ -1232,7 +1218,7 @@ std::pair<size_t, size_t> CFDE_TextEditEngine::BoundsForWordAt(
 CFDE_TextEditEngine::Iterator::Iterator(const CFDE_TextEditEngine* engine)
     : engine_(engine), current_position_(-1) {}
 
-CFDE_TextEditEngine::Iterator::~Iterator() {}
+CFDE_TextEditEngine::Iterator::~Iterator() = default;
 
 void CFDE_TextEditEngine::Iterator::Next(bool bPrev) {
   if (bPrev && current_position_ == -1)
@@ -1273,17 +1259,17 @@ size_t CFDE_TextEditEngine::Iterator::FindNextBreakPos(bool bPrev) {
   WordBreakProperty ePreType = WordBreakProperty::kNone;
   if (!IsEOF(!bPrev)) {
     Next(!bPrev);
-    ePreType = GetWordBreakProperty(GetChar());
+    ePreType = FX_GetWordBreakProperty(GetChar());
     Next(bPrev);
   }
 
-  WordBreakProperty eCurType = GetWordBreakProperty(GetChar());
+  WordBreakProperty eCurType = FX_GetWordBreakProperty(GetChar());
   bool bFirst = true;
   while (!IsEOF(bPrev)) {
     Next(bPrev);
 
-    WordBreakProperty eNextType = GetWordBreakProperty(GetChar());
-    bool wBreak = CheckStateChangeForWordBreak(eCurType, eNextType);
+    WordBreakProperty eNextType = FX_GetWordBreakProperty(GetChar());
+    bool wBreak = FX_CheckStateChangeForWordBreak(eCurType, eNextType);
     if (wBreak) {
       if (IsEOF(bPrev)) {
         Next(!bPrev);
@@ -1308,7 +1294,7 @@ size_t CFDE_TextEditEngine::Iterator::FindNextBreakPos(bool bPrev) {
         }
 
         Next(bPrev);
-        eNextType = GetWordBreakProperty(GetChar());
+        eNextType = FX_GetWordBreakProperty(GetChar());
         if (BreakFlagsChanged(nFlags, eNextType)) {
           Next(!bPrev);
           Next(!bPrev);

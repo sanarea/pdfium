@@ -50,6 +50,9 @@ class UnownedPtr {
   constexpr UnownedPtr() noexcept = default;
   constexpr UnownedPtr(const UnownedPtr& that) noexcept = default;
 
+  // Move-construct an UnownedPtr. After construction, |that| will be NULL.
+  constexpr UnownedPtr(UnownedPtr&& that) noexcept : m_pObj(that.Release()) {}
+
   template <typename U>
   explicit constexpr UnownedPtr(U* pObj) noexcept : m_pObj(pObj) {}
 
@@ -75,22 +78,20 @@ class UnownedPtr {
     return *this;
   }
 
+  // Move-assign an UnownedPtr. After assignment, |that| will be NULL.
+  UnownedPtr& operator=(UnownedPtr&& that) noexcept {
+    if (*this != that)
+      Reset(that.Release());
+    return *this;
+  }
+
   bool operator==(const UnownedPtr& that) const { return Get() == that.Get(); }
   bool operator!=(const UnownedPtr& that) const { return !(*this == that); }
   bool operator<(const UnownedPtr& that) const {
     return std::less<T*>()(Get(), that.Get());
   }
 
-  template <typename U>
-  bool operator==(const U* that) const {
-    return Get() == that;
-  }
-
-  template <typename U>
-  bool operator!=(const U* that) const {
-    return !(*this == that);
-  }
-
+  operator T*() const noexcept { return Get(); }
   T* Get() const noexcept { return m_pObj; }
 
   T* Release() {
@@ -122,16 +123,6 @@ class UnownedPtr {
 
   T* m_pObj = nullptr;
 };
-
-template <typename T, typename U>
-inline bool operator==(const U* lhs, const UnownedPtr<T>& rhs) {
-  return rhs == lhs;
-}
-
-template <typename T, typename U>
-inline bool operator!=(const U* lhs, const UnownedPtr<T>& rhs) {
-  return rhs != lhs;
-}
 
 }  // namespace fxcrt
 

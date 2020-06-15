@@ -8,7 +8,7 @@
 #include <utility>
 
 #include "core/fxcodec/scanlinedecoder.h"
-#include "third_party/base/ptr_util.h"
+#include "core/fxcrt/fx_safe_types.h"
 
 namespace fxcodec {
 
@@ -203,7 +203,7 @@ std::unique_ptr<ScanlineDecoder> BasicModule::CreateRunLengthDecoder(
     int height,
     int nComps,
     int bpc) {
-  auto pDecoder = pdfium::MakeUnique<RLScanlineDecoder>();
+  auto pDecoder = std::make_unique<RLScanlineDecoder>();
   if (!pDecoder->Create(src_buf, width, height, nComps, bpc))
     return nullptr;
 

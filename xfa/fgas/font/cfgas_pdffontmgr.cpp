@@ -13,6 +13,7 @@
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_document.h"
 #include "core/fxge/fx_font.h"
+#include "third_party/base/stl_util.h"
 #include "xfa/fgas/font/cfgas_fontmgr.h"
 #include "xfa/fgas/font/cfgas_gefont.h"
 
@@ -33,7 +34,7 @@ CFGAS_PDFFontMgr::CFGAS_PDFFontMgr(CPDF_Document* pDoc, CFGAS_FontMgr* pFontMgr)
   ASSERT(pFontMgr);
 }
 
-CFGAS_PDFFontMgr::~CFGAS_PDFFontMgr() {}
+CFGAS_PDFFontMgr::~CFGAS_PDFFontMgr() = default;
 
 RetainPtr<CFGAS_GEFont> CFGAS_PDFFontMgr::FindFont(const ByteString& strPsName,
                                                    bool bBold,
@@ -97,7 +98,7 @@ RetainPtr<CFGAS_GEFont> CFGAS_PDFFontMgr::GetFont(WideStringView wsFontFamily,
 ByteString CFGAS_PDFFontMgr::PsNameToFontName(const ByteString& strPsName,
                                               bool bBold,
                                               bool bItalic) {
-  for (size_t i = 0; i < FX_ArraySize(g_XFAPDFFontName); ++i) {
+  for (size_t i = 0; i < pdfium::size(g_XFAPDFFontName); ++i) {
     if (strPsName == g_XFAPDFFontName[i][0]) {
       size_t index = 1;
       if (bBold)
@@ -149,7 +150,7 @@ bool CFGAS_PDFFontMgr::PsNameMatchDRFontName(ByteStringView bsPsName,
       return false;
 
     if (iDifferLength > 1) {
-      ByteString bsDRTailer = bsDRName.Right(iDifferLength);
+      ByteString bsDRTailer = bsDRName.Last(iDifferLength);
       if (bsDRTailer == "MT" || bsDRTailer == "PSMT" ||
           bsDRTailer == "Regular" || bsDRTailer == "Reg") {
         return true;
@@ -160,17 +161,17 @@ bool CFGAS_PDFFontMgr::PsNameMatchDRFontName(ByteStringView bsPsName,
       bool bMatch = false;
       switch (bsPsName[iPsLen - 1]) {
         case 'L':
-          if (bsDRName.Right(5) == "Light")
+          if (bsDRName.Last(5) == "Light")
             bMatch = true;
 
           break;
         case 'R':
-          if (bsDRName.Right(7) == "Regular" || bsDRName.Right(3) == "Reg")
+          if (bsDRName.Last(7) == "Regular" || bsDRName.Last(3) == "Reg")
             bMatch = true;
 
           break;
         case 'M':
-          if (bsDRName.Right(5) == "Medium")
+          if (bsDRName.Last(5) == "Medium")
             bMatch = true;
           break;
         default:

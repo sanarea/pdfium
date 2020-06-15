@@ -7,11 +7,11 @@
 #include "xfa/fxfa/parser/cxfa_localevalue.h"
 
 #include <cwchar>
+#include <memory>
 #include <utility>
 #include <vector>
 
 #include "core/fxcrt/fx_extension.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/span.h"
 #include "third_party/base/stl_util.h"
 #include "xfa/fgas/crt/cfgas_stringformatter.h"
@@ -58,8 +58,8 @@ bool ValueSplitDateTime(const WideString& wsDateTime,
   if (!nSplitIndex.has_value())
     return false;
 
-  wsDate = wsDateTime.Left(nSplitIndex.value());
-  wsTime = wsDateTime.Right(wsDateTime.GetLength() - nSplitIndex.value() - 1);
+  wsDate = wsDateTime.First(nSplitIndex.value());
+  wsTime = wsDateTime.Last(wsDateTime.GetLength() - nSplitIndex.value() - 1);
   return true;
 }
 
@@ -137,7 +137,7 @@ bool CXFA_LocaleValue::ValidateValue(const WideString& wsValue,
   for (; !bRet && i < wsPatterns.size(); i++) {
     const WideString& wsFormat = wsPatterns[i];
     auto pFormat =
-        pdfium::MakeUnique<CFGAS_StringFormatter>(m_pLocaleMgr.Get(), wsFormat);
+        std::make_unique<CFGAS_StringFormatter>(m_pLocaleMgr.Get(), wsFormat);
     switch (ValueCategory(pFormat->GetCategory(), m_dwType)) {
       case FX_LOCALECATEGORY_Null:
         bRet = pFormat->ParseNull(wsValue);
@@ -279,7 +279,7 @@ bool CXFA_LocaleValue::FormatSinglePattern(WideString& wsResult,
   wsResult.clear();
   bool bRet = false;
   auto pFormat =
-      pdfium::MakeUnique<CFGAS_StringFormatter>(m_pLocaleMgr.Get(), wsFormat);
+      std::make_unique<CFGAS_StringFormatter>(m_pLocaleMgr.Get(), wsFormat);
   FX_LOCALECATEGORY eCategory = ValueCategory(pFormat->GetCategory(), m_dwType);
   switch (eCategory) {
     case FX_LOCALECATEGORY_Null:
@@ -554,7 +554,7 @@ bool CXFA_LocaleValue::ParsePatternValue(const WideString& wsValue,
   for (size_t i = 0; !bRet && i < wsPatterns.size(); i++) {
     const WideString& wsFormat = wsPatterns[i];
     auto pFormat =
-        pdfium::MakeUnique<CFGAS_StringFormatter>(m_pLocaleMgr.Get(), wsFormat);
+        std::make_unique<CFGAS_StringFormatter>(m_pLocaleMgr.Get(), wsFormat);
     switch (ValueCategory(pFormat->GetCategory(), m_dwType)) {
       case FX_LOCALECATEGORY_Null:
         bRet = pFormat->ParseNull(wsValue);
@@ -673,9 +673,9 @@ bool CXFA_LocaleValue::ValidateNumericTemp(const WideString& wsNumeric,
   bool bLimit = true;
   int32_t nCount = wsNumeric.GetLength();
   int32_t nCountFmt = wsFormat.GetLength();
-  while (n < nCount && (bLimit ? nf < nCountFmt : true) &&
+  while (n < nCount && (!bLimit || nf < nCountFmt) &&
          FXSYS_IsDecimalDigit(c = spNum[n])) {
-    if (bLimit == true) {
+    if (bLimit) {
       if ((cf = spFmt[nf]) == L'*')
         bLimit = false;
       else if (cf == L'z')

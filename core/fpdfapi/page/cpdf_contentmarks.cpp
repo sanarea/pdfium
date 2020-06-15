@@ -10,14 +10,13 @@
 #include <utility>
 
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
-#include "third_party/base/ptr_util.h"
 
-CPDF_ContentMarks::CPDF_ContentMarks() {}
+CPDF_ContentMarks::CPDF_ContentMarks() = default;
 
-CPDF_ContentMarks::~CPDF_ContentMarks() {}
+CPDF_ContentMarks::~CPDF_ContentMarks() = default;
 
 std::unique_ptr<CPDF_ContentMarks> CPDF_ContentMarks::Clone() {
-  auto result = pdfium::MakeUnique<CPDF_ContentMarks>();
+  auto result = std::make_unique<CPDF_ContentMarks>();
   if (m_pMarkData)
     result->m_pMarkData = pdfium::MakeRetain<MarkData>(*m_pMarkData);
   return result;
@@ -101,7 +100,7 @@ CPDF_ContentMarks::MarkData::MarkData() {}
 CPDF_ContentMarks::MarkData::MarkData(const MarkData& src)
     : m_Marks(src.m_Marks) {}
 
-CPDF_ContentMarks::MarkData::~MarkData() {}
+CPDF_ContentMarks::MarkData::~MarkData() = default;
 
 size_t CPDF_ContentMarks::MarkData::CountItems() const {
   return m_Marks.size();
@@ -109,7 +108,7 @@ size_t CPDF_ContentMarks::MarkData::CountItems() const {
 
 bool CPDF_ContentMarks::MarkData::ContainsItem(
     const CPDF_ContentMarkItem* pItem) const {
-  for (const auto pMark : m_Marks) {
+  for (const auto& pMark : m_Marks) {
     if (pMark == pItem)
       return true;
   }
@@ -126,7 +125,7 @@ const CPDF_ContentMarkItem* CPDF_ContentMarks::MarkData::GetItem(
 }
 
 int CPDF_ContentMarks::MarkData::GetMarkedContentID() const {
-  for (const auto pMark : m_Marks) {
+  for (const auto& pMark : m_Marks) {
     const CPDF_Dictionary* pDict = pMark->GetParam();
     if (pDict && pDict->KeyExist("MCID"))
       return pDict->GetIntegerFor("MCID");

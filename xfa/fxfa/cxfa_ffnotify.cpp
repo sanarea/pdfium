@@ -8,7 +8,6 @@
 
 #include <utility>
 
-#include "third_party/base/ptr_util.h"
 #include "xfa/fxfa/cxfa_ffapp.h"
 #include "xfa/fxfa/cxfa_ffarc.h"
 #include "xfa/fxfa/cxfa_ffbarcode.h"
@@ -43,21 +42,9 @@
 #include "xfa/fxfa/parser/cxfa_node.h"
 #include "xfa/fxfa/parser/cxfa_passwordedit.h"
 
-namespace {
-
-CXFA_FFDropDown* ToDropDown(CXFA_FFWidget* widget) {
-  return static_cast<CXFA_FFDropDown*>(widget);
-}
-
-CXFA_FFComboBox* ToComboBox(CXFA_FFWidget* widget) {
-  return static_cast<CXFA_FFComboBox*>(widget);
-}
-
-}  // namespace
-
 CXFA_FFNotify::CXFA_FFNotify(CXFA_FFDoc* pDoc) : m_pDoc(pDoc) {}
 
-CXFA_FFNotify::~CXFA_FFNotify() {}
+CXFA_FFNotify::~CXFA_FFNotify() = default;
 
 void CXFA_FFNotify::OnPageEvent(CXFA_ViewLayoutItem* pSender,
                                 uint32_t dwEvent) {
@@ -73,9 +60,9 @@ void CXFA_FFNotify::OnWidgetListItemAdded(CXFA_Node* pSender,
     return;
 
   CXFA_FFWidget* pWidget = m_pDoc->GetDocView()->GetWidgetForNode(pSender);
-  for (; pWidget; pWidget = pSender->GetNextWidget(pWidget)) {
+  for (; pWidget; pWidget = pWidget->GetNextFFWidget()) {
     if (pWidget->IsLoaded())
-      ToDropDown(pWidget)->InsertItem(wsLabel, iIndex);
+      ToDropDown(ToField(pWidget))->InsertItem(wsLabel, iIndex);
   }
 }
 
@@ -85,9 +72,9 @@ void CXFA_FFNotify::OnWidgetListItemRemoved(CXFA_Node* pSender,
     return;
 
   CXFA_FFWidget* pWidget = m_pDoc->GetDocView()->GetWidgetForNode(pSender);
-  for (; pWidget; pWidget = pSender->GetNextWidget(pWidget)) {
+  for (; pWidget; pWidget = pWidget->GetNextFFWidget()) {
     if (pWidget->IsLoaded())
-      ToDropDown(pWidget)->DeleteItem(iIndex);
+      ToDropDown(ToField(pWidget))->DeleteItem(iIndex);
   }
 }
 
@@ -97,8 +84,7 @@ std::unique_ptr<CXFA_FFPageView> CXFA_FFNotify::OnCreateViewLayoutItem(
     return nullptr;
 
   auto* pLayout = CXFA_LayoutProcessor::FromDocument(m_pDoc->GetXFADoc());
-  return pdfium::MakeUnique<CXFA_FFPageView>(m_pDoc->GetDocView(pLayout),
-                                             pNode);
+  return std::make_unique<CXFA_FFPageView>(m_pDoc->GetDocView(pLayout), pNode);
 }
 
 std::unique_ptr<CXFA_FFWidget> CXFA_FFNotify::OnCreateContentLayoutItem(
@@ -117,7 +103,7 @@ std::unique_ptr<CXFA_FFWidget> CXFA_FFNotify::OnCreateContentLayoutItem(
       if (child->GetElementType() != XFA_Element::Barcode)
         return nullptr;
 
-      pWidget = pdfium::MakeUnique<CXFA_FFBarcode>(
+      pWidget = std::make_unique<CXFA_FFBarcode>(
           pNode, static_cast<CXFA_Barcode*>(child));
       break;
     }
@@ -126,7 +112,7 @@ std::unique_ptr<CXFA_FFWidget> CXFA_FFNotify::OnCreateContentLayoutItem(
       if (child->GetElementType() != XFA_Element::Button)
         return nullptr;
 
-      pWidget = pdfium::MakeUnique<CXFA_FFPushButton>(
+      pWidget = std::make_unique<CXFA_FFPushButton>(
           pNode, static_cast<CXFA_Button*>(child));
       break;
     }
@@ -135,61 +121,61 @@ std::unique_ptr<CXFA_FFWidget> CXFA_FFNotify::OnCreateContentLayoutItem(
       if (child->GetElementType() != XFA_Element::CheckButton)
         return nullptr;
 
-      pWidget = pdfium::MakeUnique<CXFA_FFCheckButton>(
+      pWidget = std::make_unique<CXFA_FFCheckButton>(
           pNode, static_cast<CXFA_CheckButton*>(child));
       break;
     }
     case XFA_FFWidgetType::kChoiceList: {
       if (pNode->IsListBox())
-        pWidget = pdfium::MakeUnique<CXFA_FFListBox>(pNode);
+        pWidget = std::make_unique<CXFA_FFListBox>(pNode);
       else
-        pWidget = pdfium::MakeUnique<CXFA_FFComboBox>(pNode);
+        pWidget = std::make_unique<CXFA_FFComboBox>(pNode);
       break;
     }
     case XFA_FFWidgetType::kDateTimeEdit:
-      pWidget = pdfium::MakeUnique<CXFA_FFDateTimeEdit>(pNode);
+      pWidget = std::make_unique<CXFA_FFDateTimeEdit>(pNode);
       break;
     case XFA_FFWidgetType::kImageEdit:
-      pWidget = pdfium::MakeUnique<CXFA_FFImageEdit>(pNode);
+      pWidget = std::make_unique<CXFA_FFImageEdit>(pNode);
       break;
     case XFA_FFWidgetType::kNumericEdit:
-      pWidget = pdfium::MakeUnique<CXFA_FFNumericEdit>(pNode);
+      pWidget = std::make_unique<CXFA_FFNumericEdit>(pNode);
       break;
     case XFA_FFWidgetType::kPasswordEdit: {
       CXFA_Node* child = pNode->GetUIChildNode();
       if (child->GetElementType() != XFA_Element::PasswordEdit)
         return nullptr;
 
-      pWidget = pdfium::MakeUnique<CXFA_FFPasswordEdit>(
+      pWidget = std::make_unique<CXFA_FFPasswordEdit>(
           pNode, static_cast<CXFA_PasswordEdit*>(child));
       break;
     }
     case XFA_FFWidgetType::kSignature:
-      pWidget = pdfium::MakeUnique<CXFA_FFSignature>(pNode);
+      pWidget = std::make_unique<CXFA_FFSignature>(pNode);
       break;
     case XFA_FFWidgetType::kTextEdit:
-      pWidget = pdfium::MakeUnique<CXFA_FFTextEdit>(pNode);
+      pWidget = std::make_unique<CXFA_FFTextEdit>(pNode);
       break;
     case XFA_FFWidgetType::kArc:
-      pWidget = pdfium::MakeUnique<CXFA_FFArc>(pNode);
+      pWidget = std::make_unique<CXFA_FFArc>(pNode);
       break;
     case XFA_FFWidgetType::kLine:
-      pWidget = pdfium::MakeUnique<CXFA_FFLine>(pNode);
+      pWidget = std::make_unique<CXFA_FFLine>(pNode);
       break;
     case XFA_FFWidgetType::kRectangle:
-      pWidget = pdfium::MakeUnique<CXFA_FFRectangle>(pNode);
+      pWidget = std::make_unique<CXFA_FFRectangle>(pNode);
       break;
     case XFA_FFWidgetType::kText:
-      pWidget = pdfium::MakeUnique<CXFA_FFText>(pNode);
+      pWidget = std::make_unique<CXFA_FFText>(pNode);
       break;
     case XFA_FFWidgetType::kImage:
-      pWidget = pdfium::MakeUnique<CXFA_FFImage>(pNode);
+      pWidget = std::make_unique<CXFA_FFImage>(pNode);
       break;
     case XFA_FFWidgetType::kSubform:
-      pWidget = pdfium::MakeUnique<CXFA_FFWidget>(pNode);
+      pWidget = std::make_unique<CXFA_FFWidget>(pNode);
       break;
     case XFA_FFWidgetType::kExclGroup:
-      pWidget = pdfium::MakeUnique<CXFA_FFExclGroup>(pNode);
+      pWidget = std::make_unique<CXFA_FFExclGroup>(pNode);
       break;
     case XFA_FFWidgetType::kNone:
       return nullptr;
@@ -249,16 +235,37 @@ CXFA_FFWidgetHandler* CXFA_FFNotify::GetWidgetHandler() {
   return pDocView ? pDocView->GetWidgetHandler() : nullptr;
 }
 
-void CXFA_FFNotify::OpenDropDownList(CXFA_FFWidget* hWidget) {
+void CXFA_FFNotify::OpenDropDownList(CXFA_Node* pNode) {
+  auto* pDocLayout = CXFA_LayoutProcessor::FromDocument(m_pDoc->GetXFADoc());
+  CXFA_LayoutItem* pLayoutItem = pDocLayout->GetLayoutItem(pNode);
+  if (!pLayoutItem)
+    return;
+
+  CXFA_FFWidget* hWidget = XFA_GetWidgetFromLayoutItem(pLayoutItem);
+  if (!hWidget)
+    return;
+
+  // SetFocusWidget() may destroy |hWidget| object by JS callback.
+  ObservedPtr<CXFA_FFWidget> pObservedWidget(hWidget);
+  CXFA_FFDoc* hDoc = GetHDOC();
+  hDoc->GetDocEnvironment()->SetFocusWidget(hDoc, hWidget);
+  if (!pObservedWidget)
+    return;
+
   if (hWidget->GetNode()->GetFFWidgetType() != XFA_FFWidgetType::kChoiceList)
     return;
 
   if (!hWidget->IsLoaded())
     return;
 
+  CXFA_FFDropDown* pDropDown = ToDropDown(ToField(hWidget));
+  CXFA_FFComboBox* pComboBox = ToComboBox(pDropDown);
+  if (!pComboBox)
+    return;
+
   CXFA_FFDocView* pDocView = m_pDoc->GetDocView();
   pDocView->LockUpdate();
-  ToComboBox(hWidget)->OpenDropDownList();
+  pComboBox->OpenDropDownList();
   pDocView->UnlockUpdate();
   pDocView->UpdateDocView();
 }
@@ -341,7 +348,7 @@ void CXFA_FFNotify::OnValueChanging(CXFA_Node* pSender, XFA_Attribute eAttr) {
     return;
 
   CXFA_FFWidget* pWidget = m_pDoc->GetDocView()->GetWidgetForNode(pSender);
-  for (; pWidget; pWidget = pSender->GetNextWidget(pWidget)) {
+  for (; pWidget; pWidget = pWidget->GetNextFFWidget()) {
     if (pWidget->IsLoaded())
       pWidget->InvalidateRect();
   }
@@ -388,19 +395,19 @@ void CXFA_FFNotify::OnValueChanged(CXFA_Node* pSender,
     pDocView->AddCalculateNodeNotify(pSender);
     if (eType == XFA_Element::Value || bIsContainerNode) {
       if (bIsContainerNode) {
-        pWidgetNode->UpdateUIDisplay(m_pDoc->GetDocView(), nullptr);
+        m_pDoc->GetDocView()->UpdateUIDisplay(pWidgetNode, nullptr);
         pDocView->AddCalculateNode(pWidgetNode);
         pDocView->AddValidateNode(pWidgetNode);
       } else if (pWidgetNode->GetParent()->GetElementType() ==
                  XFA_Element::ExclGroup) {
-        pWidgetNode->UpdateUIDisplay(m_pDoc->GetDocView(), nullptr);
+        m_pDoc->GetDocView()->UpdateUIDisplay(pWidgetNode, nullptr);
       }
       return;
     }
   }
 
   CXFA_FFWidget* pWidget = m_pDoc->GetDocView()->GetWidgetForNode(pWidgetNode);
-  for (; pWidget; pWidget = pWidgetNode->GetNextWidget(pWidget)) {
+  for (; pWidget; pWidget = pWidget->GetNextFFWidget()) {
     if (!pWidget->IsLoaded())
       continue;
 
@@ -412,8 +419,7 @@ void CXFA_FFNotify::OnValueChanged(CXFA_Node* pSender,
 }
 
 void CXFA_FFNotify::OnContainerChanged(CXFA_Node* pNode) {
-  auto* pLayout = CXFA_LayoutProcessor::FromDocument(m_pDoc->GetXFADoc());
-  pLayout->AddChangedContainer(pNode);
+  m_pDoc->GetXFADoc()->GetLayoutProcessor()->AddChangedContainer(pNode);
 }
 
 void CXFA_FFNotify::OnChildAdded(CXFA_Node* pSender) {

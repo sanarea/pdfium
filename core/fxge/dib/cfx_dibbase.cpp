@@ -11,6 +11,8 @@
 #include <utility>
 #include <vector>
 
+#include "core/fxcrt/fx_memory.h"
+#include "core/fxcrt/fx_safe_types.h"
 #include "core/fxge/cfx_cliprgn.h"
 #include "core/fxge/dib/cfx_bitmapstorer.h"
 #include "core/fxge/dib/cfx_cmyk_to_srgb.h"
@@ -18,6 +20,7 @@
 #include "core/fxge/dib/cfx_imagestretcher.h"
 #include "core/fxge/dib/cfx_imagetransformer.h"
 #include "third_party/base/logging.h"
+#include "third_party/base/stl_util.h"
 
 namespace {
 
@@ -95,7 +98,7 @@ CFX_Palette::CFX_Palette(const RetainPtr<CFX_DIBBase>& pBitmap)
   Obtain_Pal(m_Luts.data(), m_Palette.data(), m_lut);
 }
 
-CFX_Palette::~CFX_Palette() {}
+CFX_Palette::~CFX_Palette() = default;
 
 void ConvertBuffer_1bppMask2Gray(uint8_t* dest_buf,
                                  int dest_pitch,
@@ -190,14 +193,14 @@ void ConvertBuffer_8bppPlt2Gray(uint8_t* dest_buf,
     uint8_t r;
     uint8_t g;
     uint8_t b;
-    for (size_t i = 0; i < FX_ArraySize(gray); ++i) {
+    for (size_t i = 0; i < pdfium::size(gray); ++i) {
       std::tie(r, g, b) = AdobeCMYK_to_sRGB1(
           FXSYS_GetCValue(src_plt[i]), FXSYS_GetMValue(src_plt[i]),
           FXSYS_GetYValue(src_plt[i]), FXSYS_GetKValue(src_plt[i]));
       gray[i] = FXRGB2GRAY(r, g, b);
     }
   } else {
-    for (size_t i = 0; i < FX_ArraySize(gray); ++i) {
+    for (size_t i = 0; i < pdfium::size(gray); ++i) {
       gray[i] = FXRGB2GRAY(FXARGB_R(src_plt[i]), FXARGB_G(src_plt[i]),
                            FXARGB_B(src_plt[i]));
     }
@@ -292,9 +295,9 @@ void ConvertBuffer_Plt2PltRgb8(uint8_t* dest_buf,
   ConvertBuffer_IndexCopy(dest_buf, dest_pitch, width, height, pSrcBitmap,
                           src_left, src_top);
   uint32_t* src_plt = pSrcBitmap->GetPalette();
-  int plt_size = pSrcBitmap->GetPaletteSize();
+  size_t plt_size = pSrcBitmap->GetPaletteSize();
   if (pSrcBitmap->IsCmykImage()) {
-    for (int i = 0; i < plt_size; ++i) {
+    for (size_t i = 0; i < plt_size; ++i) {
       uint8_t r;
       uint8_t g;
       uint8_t b;
@@ -717,7 +720,7 @@ bool ConvertBuffer_Argb(int bpp,
 CFX_DIBBase::CFX_DIBBase()
     : m_Width(0), m_Height(0), m_bpp(0), m_AlphaFlag(0), m_Pitch(0) {}
 
-CFX_DIBBase::~CFX_DIBBase() {}
+CFX_DIBBase::~CFX_DIBBase() = default;
 
 uint8_t* CFX_DIBBase::GetBuffer() const {
   return nullptr;
@@ -807,6 +810,20 @@ bool CFX_DIBBase::BuildAlphaMask() {
   return true;
 }
 
+size_t CFX_DIBBase::GetPaletteSize() const {
+  if (IsAlphaMask())
+    return 0;
+
+  switch (m_bpp) {
+    case 1:
+      return 2;
+    case 8:
+      return 256;
+    default:
+      return 0;
+  }
+}
+
 uint32_t CFX_DIBBase::GetPaletteArgb(int index) const {
   ASSERT((GetBPP() == 1 || GetBPP() == 8) && !IsAlphaMask());
   if (m_pPalette)
@@ -888,13 +905,13 @@ bool CFX_DIBBase::GetOverlapRect(int& dest_left,
   dest_left = dest_rect.left;
   dest_top = dest_rect.top;
 
-  pdfium::base::CheckedNumeric<int> safe_src_left = dest_left;
+  FX_SAFE_INT32 safe_src_left = dest_left;
   safe_src_left -= x_offset;
   if (!safe_src_left.IsValid())
     return false;
   src_left = safe_src_left.ValueOrDie();
 
-  pdfium::base::CheckedNumeric<int> safe_src_top = dest_top;
+  FX_SAFE_INT32 safe_src_top = dest_top;
   safe_src_top -= y_offset;
   if (!safe_src_top.IsValid())
     return false;

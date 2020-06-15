@@ -18,7 +18,6 @@
 #include "core/fpdfapi/parser/fpdf_parser_decode.h"
 #include "core/fxcrt/fx_stream.h"
 #include "third_party/base/numerics/safe_conversions.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 
 namespace {
@@ -100,7 +99,7 @@ RetainPtr<CPDF_Object> CPDF_Stream::CloneNonCyclic(
   uint32_t streamSize = pAcc->GetSize();
   const CPDF_Dictionary* pDict = GetDict();
   RetainPtr<CPDF_Dictionary> pNewDict;
-  if (pDict && !pdfium::ContainsKey(*pVisited, pDict)) {
+  if (pDict && !pdfium::Contains(*pVisited, pDict)) {
     pNewDict =
         ToDictionary(static_cast<const CPDF_Object*>(pDict)->CloneNonCyclic(
             bDirect, pVisited));
@@ -130,7 +129,7 @@ void CPDF_Stream::SetDataFromStringstreamAndRemoveFilter(
 void CPDF_Stream::SetData(pdfium::span<const uint8_t> pData) {
   std::unique_ptr<uint8_t, FxFreeDeleter> data_copy;
   if (!pData.empty()) {
-    data_copy.reset(FX_Alloc(uint8_t, pData.size()));
+    data_copy.reset(FX_AllocUninit(uint8_t, pData.size()));
     memcpy(data_copy.get(), pData.data(), pData.size());
   }
   TakeData(std::move(data_copy), pData.size());
@@ -183,7 +182,7 @@ bool CPDF_Stream::WriteTo(IFX_ArchiveStream* archive,
   const bool is_metadata = IsMetaDataStreamDictionary(GetDict());
   CPDF_FlateEncoder encoder(this, !is_metadata);
 
-  std::vector<uint8_t> encrypted_data;
+  std::vector<uint8_t, FxAllocAllocator<uint8_t>> encrypted_data;
   pdfium::span<const uint8_t> data = encoder.GetSpan();
 
   if (encryptor && !is_metadata) {

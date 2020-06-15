@@ -31,7 +31,6 @@
 #include "core/fxcrt/unowned_ptr.h"
 #include "fpdfsdk/cpdfsdk_helpers.h"
 #include "public/cpp/fpdf_scopers.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -222,12 +221,13 @@ bool ParsePageRangeString(const ByteString& bsPageRange,
   size_t nStringTo = 0;
   while (nStringTo < nLength) {
     nStringTo = bsStrippedPageRange.Find(',', nStringFrom).value_or(nLength);
-    cbMidRange = bsStrippedPageRange.Mid(nStringFrom, nStringTo - nStringFrom);
+    cbMidRange =
+        bsStrippedPageRange.Substr(nStringFrom, nStringTo - nStringFrom);
     Optional<size_t> nDashPosition = cbMidRange.Find('-');
     if (nDashPosition) {
       size_t nMid = nDashPosition.value();
       uint32_t nStartPageNum = pdfium::base::checked_cast<uint32_t>(
-          atoi(cbMidRange.Left(nMid).c_str()));
+          atoi(cbMidRange.First(nMid).c_str()));
       if (nStartPageNum == 0)
         return false;
 
@@ -237,7 +237,7 @@ bool ParsePageRangeString(const ByteString& bsPageRange,
         return false;
 
       uint32_t nEndPageNum = pdfium::base::checked_cast<uint32_t>(
-          atoi(cbMidRange.Mid(nMid, nEnd).c_str()));
+          atoi(cbMidRange.Substr(nMid, nEnd).c_str()));
       if (nStartPageNum < 0 || nStartPageNum > nEndPageNum ||
           nEndPageNum > nCount) {
         return false;
@@ -622,7 +622,7 @@ bool CPDF_NPageToOneExporter::ExportNPagesToOne(
 
       auto pSrcPage = pdfium::MakeRetain<CPDF_Page>(src(), pSrcPageDict);
       pSrcPage->SetRenderCache(
-          pdfium::MakeUnique<CPDF_PageRenderCache>(pSrcPage.Get()));
+          std::make_unique<CPDF_PageRenderCache>(pSrcPage.Get()));
       NupPageSettings settings =
           nupState.CalculateNewPagePosition(pSrcPage->GetPageSize());
       bsContent += AddSubPage(pSrcPageDict, settings);
@@ -690,14 +690,14 @@ ByteString CPDF_NPageToOneExporter::MakeXObjectFromPage(
         const CPDF_Stream* pStream = pSrcContentArray->GetStreamAt(i);
         auto pAcc = pdfium::MakeRetain<CPDF_StreamAcc>(pStream);
         pAcc->LoadAllDataFiltered();
-        bsSrcContentStream += ByteString(pAcc->GetData(), pAcc->GetSize());
+        bsSrcContentStream += ByteString(pAcc->GetSpan());
         bsSrcContentStream += "\n";
       }
     } else {
       const CPDF_Stream* pStream = pSrcContentObj->AsStream();
       auto pAcc = pdfium::MakeRetain<CPDF_StreamAcc>(pStream);
       pAcc->LoadAllDataFiltered();
-      bsSrcContentStream = ByteString(pAcc->GetData(), pAcc->GetSize());
+      bsSrcContentStream = ByteString(pAcc->GetSpan());
     }
     pNewXObject->SetDataAndRemoveFilter(bsSrcContentStream.raw_span());
   }

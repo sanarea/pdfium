@@ -35,6 +35,7 @@
 #include "fxjs/js_define.h"
 #include "fxjs/js_resources.h"
 #include "third_party/base/optional.h"
+#include "third_party/base/stl_util.h"
 
 // static
 const JSMethodSpec CJS_PublicMethods::GlobalFunctionSpecs[] = {
@@ -124,11 +125,11 @@ ByteString CalculateString(double dValue,
 WideString CalcMergedString(const CJS_EventRecorder* event,
                             const WideString& value,
                             const WideString& change) {
-  WideString prefix = value.Left(event->SelStart());
+  WideString prefix = value.First(event->SelStart());
   WideString postfix;
   int end = event->SelEnd();
   if (end >= 0 && static_cast<size_t>(end) < value.GetLength())
-    postfix = value.Right(value.GetLength() - static_cast<size_t>(end));
+    postfix = value.Last(value.GetLength() - static_cast<size_t>(end));
   return prefix + change + postfix;
 }
 
@@ -342,7 +343,6 @@ v8::Local<v8::Array> CJS_PublicMethods::AF_MakeArrayFromList(
   }
   return StrArray;
 }
-
 
 double CJS_PublicMethods::ParseDate(const WideString& value,
                                     bool* bWrongFormat) {
@@ -721,8 +721,8 @@ CJS_Result CJS_PublicMethods::AFNumber_Keystroke(
 
   WideString wstrSelected;
   if (pEvent->SelStart() != -1) {
-    wstrSelected = wstrValue.Mid(pEvent->SelStart(),
-                                 pEvent->SelEnd() - pEvent->SelStart());
+    wstrSelected = wstrValue.Substr(pEvent->SelStart(),
+                                    pEvent->SelEnd() - pEvent->SelStart());
   }
 
   bool bHasSign = wstrValue.Contains(L'-') && !wstrSelected.Contains(L'-');
@@ -925,7 +925,7 @@ double CJS_PublicMethods::ParseDateAsGMT(const WideString& strValue) {
 
   int nMonth = 1;
   sTemp = wsArray[1];
-  for (size_t i = 0; i < FX_ArraySize(fxjs::kMonths); ++i) {
+  for (size_t i = 0; i < pdfium::size(fxjs::kMonths); ++i) {
     if (sTemp.Compare(fxjs::kMonths[i]) == 0) {
       nMonth = i + 1;
       break;
@@ -985,7 +985,7 @@ CJS_Result CJS_PublicMethods::AFDate_Format(
     return CJS_Result::Failure(JSMessage::kParamError);
 
   int iIndex = WithinBoundsOrZero(pRuntime->ToInt32(params[0]),
-                                  FX_ArraySize(kDateFormats));
+                                  pdfium::size(kDateFormats));
   std::vector<v8::Local<v8::Value>> newParams;
   newParams.push_back(pRuntime->NewString(kDateFormats[iIndex]));
   return AFDate_FormatEx(pRuntime, newParams);
@@ -999,7 +999,7 @@ CJS_Result CJS_PublicMethods::AFDate_Keystroke(
     return CJS_Result::Failure(JSMessage::kParamError);
 
   int iIndex = WithinBoundsOrZero(pRuntime->ToInt32(params[0]),
-                                  FX_ArraySize(kDateFormats));
+                                  pdfium::size(kDateFormats));
   std::vector<v8::Local<v8::Value>> newParams;
   newParams.push_back(pRuntime->NewString(kDateFormats[iIndex]));
   return AFDate_KeystrokeEx(pRuntime, newParams);
@@ -1013,7 +1013,7 @@ CJS_Result CJS_PublicMethods::AFTime_Format(
     return CJS_Result::Failure(JSMessage::kParamError);
 
   int iIndex = WithinBoundsOrZero(pRuntime->ToInt32(params[0]),
-                                  FX_ArraySize(kTimeFormats));
+                                  pdfium::size(kTimeFormats));
   std::vector<v8::Local<v8::Value>> newParams;
   newParams.push_back(pRuntime->NewString(kTimeFormats[iIndex]));
   return AFDate_FormatEx(pRuntime, newParams);
@@ -1026,7 +1026,7 @@ CJS_Result CJS_PublicMethods::AFTime_Keystroke(
     return CJS_Result::Failure(JSMessage::kParamError);
 
   int iIndex = WithinBoundsOrZero(pRuntime->ToInt32(params[0]),
-                                  FX_ArraySize(kTimeFormats));
+                                  pdfium::size(kTimeFormats));
   std::vector<v8::Local<v8::Value>> newParams;
   newParams.push_back(pRuntime->NewString(kTimeFormats[iIndex]));
   return AFDate_KeystrokeEx(pRuntime, newParams);

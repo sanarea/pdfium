@@ -47,20 +47,6 @@ if (pdf_enable_xfa) {
 }
 
 if (pdf_bundle_freetype) {
-  config("fx_freetype_warnings") {
-    visibility = [ ":*" ]
-    if (is_clang) {
-      # open_face_PS_from_sfnt_stream() and open_face_from_buffer() in
-      # ftbase.h are unused.
-      #
-      # ttgload.c casts from unsigned int to unsigned long to void*.
-      cflags = [
-        "-Wno-unused-function",
-        "-Wno-int-to-void-pointer-cast",
-      ]
-    }
-  }
-
   config("freetype_public_includes_config") {
     # The relative freetype/include path points to PDFium's custom config.
     # The absolute path points to whatever copy of FreeType is in
@@ -85,9 +71,6 @@ if (pdf_bundle_freetype) {
     configs += [
       "//build/config/compiler:no_chromium_code",
       ":pdfium_third_party_config",
-
-      # Must be after no_chromium_code for warning flags to be ordered correctly.
-      ":fx_freetype_warnings",
     ]
 
     public_configs = [ ":freetype_public_includes_config" ]
@@ -252,9 +235,7 @@ if (!pdf_use_skia && !pdf_use_skia_paths) {
       "agg23/agg_vcgen_dash.cpp",
       "agg23/agg_vcgen_stroke.cpp",
     ]
-    deps = [
-      "../core/fxcrt",
-    ]
+    deps = [ "../core/fxcrt" ]
   }
 }
 
@@ -265,9 +246,6 @@ config("fx_lcms2_warnings") {
       # cmslut.cc is sloppy with aggregate initialization. Version 2.7 of this
       # library doesn't appear to have this problem.
       "-Wno-missing-braces",
-
-      # FindPrev() in cmsplugin.c is unused.
-      "-Wno-unused-function",
     ]
   }
 }
@@ -312,9 +290,7 @@ source_set("fx_lcms2") {
     "lcms/src/cmswtpnt.c",
     "lcms/src/cmsxform.c",
   ]
-  deps = [
-    "../core/fxcrt",
-  ]
+  deps = [ "../core/fxcrt" ]
 }
 
 if (!build_with_chromium) {
@@ -343,14 +319,10 @@ if (!build_with_chromium) {
     if (use_system_libjpeg) {
       public_configs = [ ":system_libjpeg_config" ]
     } else if (use_libjpeg_turbo) {
-      public_deps = [
-        "//third_party/libjpeg_turbo:libjpeg",
-      ]
+      public_deps = [ "//third_party/libjpeg_turbo:libjpeg" ]
       public_configs = [ ":libjpeg_turbo_config" ]
     } else {
-      public_deps = [
-        "//third_party/libjpeg:libjpeg",
-      ]
+      public_deps = [ "//third_party/libjpeg:libjpeg" ]
     }
   }
 }
@@ -364,9 +336,7 @@ group("zlib") {
   if (use_system_zlib) {
     public_configs = [ ":system_zlib_config" ]
   } else {
-    public_deps = [
-      "//third_party/zlib",
-    ]
+    public_deps = [ "//third_party/zlib" ]
   }
 }
 
@@ -380,9 +350,7 @@ group("lcms2") {
   if (use_system_lcms2) {
     public_configs = [ ":lcms2_from_pkgconfig" ]
   } else {
-    public_deps = [
-      ":fx_lcms2",
-    ]
+    public_deps = [ ":fx_lcms2" ]
   }
 }
 
@@ -396,15 +364,13 @@ group("libopenjpeg2") {
   if (use_system_libopenjpeg2) {
     public_configs = [ ":libopenjpeg2_from_pkgconfig" ]
   } else {
-    public_deps = [
-      ":fx_libopenjpeg",
-    ]
+    public_deps = [ ":fx_libopenjpeg" ]
   }
 }
 
 config("fx_libopenjpeg_warnings") {
   visibility = [ ":*" ]
-  if (is_win) {
+  if (is_win && !is_clang && target_cpu == "x86") {
     cflags = [
       # Signed/unsigned comparisons.
       "/wd4018",
@@ -436,6 +402,8 @@ source_set("fx_libopenjpeg") {
     "libopenjpeg20/mqc.c",
     "libopenjpeg20/openjpeg.c",
     "libopenjpeg20/opj_clock.c",
+    "libopenjpeg20/opj_malloc.cc",
+    "libopenjpeg20/opj_malloc.h",
     "libopenjpeg20/pi.c",
     "libopenjpeg20/sparse_array.c",
     "libopenjpeg20/sparse_array.h",
@@ -456,9 +424,7 @@ group("png") {
   if (use_system_libpng) {
     public_configs = [ ":system_libpng_config" ]
   } else {
-    public_deps = [
-      ":fx_lpng",
-    ]
+    public_deps = [ ":fx_lpng" ]
   }
 }
 
@@ -496,9 +462,7 @@ source_set("fx_lpng") {
 
   defines = []
   cflags = []
-  deps = [
-    ":zlib",
-  ]
+  deps = [ ":zlib" ]
 
   if (current_cpu == "x86" || current_cpu == "x64") {
     sources += [
@@ -615,6 +579,8 @@ source_set("pdfium_base") {
     "base/allocator/partition_allocator/partition_page.h",
     "base/allocator/partition_allocator/partition_root_base.cc",
     "base/allocator/partition_allocator/partition_root_base.h",
+    "base/allocator/partition_allocator/random.cc",
+    "base/allocator/partition_allocator/random.h",
     "base/allocator/partition_allocator/spin_lock.cc",
     "base/allocator/partition_allocator/spin_lock.h",
     "base/base_export.h",
@@ -622,12 +588,22 @@ source_set("pdfium_base") {
     "base/compiler_specific.h",
     "base/debug/alias.cc",
     "base/debug/alias.h",
+    "base/immediate_crash.h",
     "base/logging.h",
+    "base/memory/aligned_memory.cc",
+    "base/memory/aligned_memory.h",
+    "base/no_destructor.h",
+    "base/numerics/checked_math.h",
+    "base/numerics/checked_math_impl.h",
+    "base/numerics/clamped_math.h",
+    "base/numerics/clamped_math_impl.h",
     "base/numerics/safe_conversions.h",
     "base/numerics/safe_conversions_arm_impl.h",
     "base/numerics/safe_conversions_impl.h",
     "base/numerics/safe_math.h",
-    "base/numerics/safe_math_impl.h",
+    "base/numerics/safe_math_arm_impl.h",
+    "base/numerics/safe_math_clang_gcc_impl.h",
+    "base/numerics/safe_math_shared_impl.h",
     "base/optional.h",
     "base/span.h",
     "base/stl_util.h",

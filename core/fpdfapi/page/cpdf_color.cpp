@@ -6,10 +6,7 @@
 
 #include "core/fpdfapi/page/cpdf_color.h"
 
-#include "core/fpdfapi/page/cpdf_docpagedata.h"
 #include "core/fpdfapi/page/cpdf_patterncs.h"
-#include "core/fpdfapi/parser/cpdf_array.h"
-#include "core/fpdfapi/parser/cpdf_document.h"
 #include "core/fxcrt/fx_system.h"
 
 CPDF_Color::CPDF_Color() = default;
@@ -32,7 +29,7 @@ void CPDF_Color::SetColorSpace(const RetainPtr<CPDF_ColorSpace>& pCS) {
   m_pCS = pCS;
   if (IsPatternInternal()) {
     m_Buffer.clear();
-    m_pValue = pdfium::MakeUnique<PatternValue>();
+    m_pValue = std::make_unique<PatternValue>();
   } else {
     m_Buffer = pCS->CreateBufAndSetDefaultColor();
     m_pValue.reset();
@@ -62,8 +59,8 @@ CPDF_Color& CPDF_Color::operator=(const CPDF_Color& that) {
     return *this;
 
   m_Buffer = that.m_Buffer;
-  m_pValue = that.m_pValue ? pdfium::MakeUnique<PatternValue>(*that.m_pValue)
-                           : nullptr;
+  m_pValue =
+      that.m_pValue ? std::make_unique<PatternValue>(*that.m_pValue) : nullptr;
   m_pCS = that.m_pCS;
   return *this;
 }

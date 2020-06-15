@@ -6,22 +6,22 @@
 
 #include "core/fpdfapi/font/cpdf_cmapparser.h"
 
-#include <vector>
-
-#include "core/fpdfapi/cmaps/cmap_int.h"
+#include "core/fpdfapi/cmaps/fpdf_cmaps.h"
 #include "core/fpdfapi/parser/cpdf_array.h"
 #include "core/fpdfapi/parser/cpdf_dictionary.h"
 #include "core/fpdfapi/parser/cpdf_simple_parser.h"
 #include "core/fxcrt/fx_extension.h"
+#include "core/fxcrt/fx_safe_types.h"
 #include "core/fxge/fx_freetype.h"
 #include "third_party/base/logging.h"
+#include "third_party/base/stl_util.h"
 
 namespace {
 
 ByteStringView CMap_GetString(ByteStringView word) {
   if (word.GetLength() <= 2)
     return ByteStringView();
-  return word.Right(word.GetLength() - 2);
+  return word.Last(word.GetLength() - 2);
 }
 
 }  // namespace
@@ -109,7 +109,7 @@ void CPDF_CMapParser::HandleCid(ByteStringView word) {
 
 void CPDF_CMapParser::HandleCodeSpaceRange(ByteStringView word) {
   if (word != "endcodespacerange") {
-    if (word.GetLength() == 0 || word[0] != '<')
+    if (word.IsEmpty() || word[0] != '<')
       return;
 
     if (m_CodeSeq % 2) {
@@ -143,7 +143,7 @@ uint32_t CPDF_CMapParser::GetCode(ByteStringView word) {
   if (word.IsEmpty())
     return 0;
 
-  pdfium::base::CheckedNumeric<uint32_t> num = 0;
+  FX_SAFE_UINT32 num = 0;
   if (word[0] == '<') {
     for (size_t i = 1; i < word.GetLength() && std::isxdigit(word[i]); ++i) {
       num = num * 16 + FXSYS_HexCharToInt(word[i]);
@@ -165,7 +165,7 @@ uint32_t CPDF_CMapParser::GetCode(ByteStringView word) {
 Optional<CPDF_CMap::CodeRange> CPDF_CMapParser::GetCodeRange(
     ByteStringView first,
     ByteStringView second) {
-  if (first.GetLength() == 0 || first[0] != '<')
+  if (first.IsEmpty() || first[0] != '<')
     return pdfium::nullopt;
 
   size_t i;
@@ -202,10 +202,10 @@ Optional<CPDF_CMap::CodeRange> CPDF_CMapParser::GetCodeRange(
 CIDSet CPDF_CMapParser::CharsetFromOrdering(ByteStringView ordering) {
   static const char* const kCharsetNames[CIDSET_NUM_SETS] = {
       nullptr, "GB1", "CNS1", "Japan1", "Korea1", "UCS"};
-  static_assert(FX_ArraySize(kCharsetNames) == CIDSET_NUM_SETS,
+  static_assert(pdfium::size(kCharsetNames) == CIDSET_NUM_SETS,
                 "Too many CID sets");
 
-  for (size_t charset = 1; charset < FX_ArraySize(kCharsetNames); ++charset) {
+  for (size_t charset = 1; charset < pdfium::size(kCharsetNames); ++charset) {
     if (ordering == kCharsetNames[charset])
       return static_cast<CIDSet>(charset);
   }

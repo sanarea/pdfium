@@ -23,7 +23,7 @@
 #include "core/fxge/cfx_substfont.h"
 #include "core/fxge/fx_font.h"
 #include "core/fxge/scoped_font_transform.h"
-#include "third_party/base/ptr_util.h"
+#include "third_party/base/span.h"
 
 #define EM_ADJUST(em, a) (em == 0 ? (a) : (a)*1000 / em)
 
@@ -59,7 +59,7 @@ RetainPtr<CFX_Face> LoadFileImp(FXFT_LibraryRec* library,
                                 const RetainPtr<IFX_SeekableReadStream>& pFile,
                                 int32_t faceIndex,
                                 std::unique_ptr<FXFT_StreamRec>* stream) {
-  auto stream1 = pdfium::MakeUnique<FXFT_StreamRec>();
+  auto stream1 = std::make_unique<FXFT_StreamRec>();
   stream1->base = nullptr;
   stream1->size = static_cast<unsigned long>(pFile->GetSize());
   stream1->pos = 0;
@@ -81,21 +81,25 @@ RetainPtr<CFX_Face> LoadFileImp(FXFT_LibraryRec* library,
 #endif  // PDF_ENABLE_XFA
 
 void Outline_CheckEmptyContour(OUTLINE_PARAMS* param) {
-  std::vector<FX_PATHPOINT>& points = param->m_pPath->GetPoints();
-  size_t size = points.size();
+  size_t size;
+  {
+    pdfium::span<const FX_PATHPOINT> points = param->m_pPath->GetPoints();
+    size = points.size();
 
-  if (size >= 2 && points[size - 2].IsTypeAndOpen(FXPT_TYPE::MoveTo) &&
-      points[size - 2].m_Point == points[size - 1].m_Point) {
-    size -= 2;
+    if (size >= 2 && points[size - 2].IsTypeAndOpen(FXPT_TYPE::MoveTo) &&
+        points[size - 2].m_Point == points[size - 1].m_Point) {
+      size -= 2;
+    }
+    if (size >= 4 && points[size - 4].IsTypeAndOpen(FXPT_TYPE::MoveTo) &&
+        points[size - 3].IsTypeAndOpen(FXPT_TYPE::BezierTo) &&
+        points[size - 3].m_Point == points[size - 4].m_Point &&
+        points[size - 2].m_Point == points[size - 4].m_Point &&
+        points[size - 1].m_Point == points[size - 4].m_Point) {
+      size -= 4;
+    }
   }
-  if (size >= 4 && points[size - 4].IsTypeAndOpen(FXPT_TYPE::MoveTo) &&
-      points[size - 3].IsTypeAndOpen(FXPT_TYPE::BezierTo) &&
-      points[size - 3].m_Point == points[size - 4].m_Point &&
-      points[size - 2].m_Point == points[size - 4].m_Point &&
-      points[size - 1].m_Point == points[size - 4].m_Point) {
-    size -= 4;
-  }
-  points.resize(size);
+  // Only safe after |points| has been destroyed.
+  param->m_pPath->GetPoints().resize(size);
 }
 
 int Outline_MoveTo(const FT_Vector* to, void* user) {
@@ -106,7 +110,7 @@ int Outline_MoveTo(const FT_Vector* to, void* user) {
   param->m_pPath->ClosePath();
   param->m_pPath->AppendPoint(
       CFX_PointF(to->x / param->m_CoordUnit, to->y / param->m_CoordUnit),
-      FXPT_TYPE::MoveTo, false);
+      FXPT_TYPE::MoveTo);
 
   param->m_CurX = to->x;
   param->m_CurY = to->y;
@@ -118,7 +122,7 @@ int Outline_LineTo(const FT_Vector* to, void* user) {
 
   param->m_pPath->AppendPoint(
       CFX_PointF(to->x / param->m_CoordUnit, to->y / param->m_CoordUnit),
-      FXPT_TYPE::LineTo, false);
+      FXPT_TYPE::LineTo);
 
   param->m_CurX = to->x;
   param->m_CurY = to->y;
@@ -133,16 +137,16 @@ int Outline_ConicTo(const FT_Vector* control, const FT_Vector* to, void* user) {
                      param->m_CoordUnit,
                  (param->m_CurY + (control->y - param->m_CurY) * 2 / 3) /
                      param->m_CoordUnit),
-      FXPT_TYPE::BezierTo, false);
+      FXPT_TYPE::BezierTo);
 
   param->m_pPath->AppendPoint(
       CFX_PointF((control->x + (to->x - control->x) / 3) / param->m_CoordUnit,
                  (control->y + (to->y - control->y) / 3) / param->m_CoordUnit),
-      FXPT_TYPE::BezierTo, false);
+      FXPT_TYPE::BezierTo);
 
   param->m_pPath->AppendPoint(
       CFX_PointF(to->x / param->m_CoordUnit, to->y / param->m_CoordUnit),
-      FXPT_TYPE::BezierTo, false);
+      FXPT_TYPE::BezierTo);
 
   param->m_CurX = to->x;
   param->m_CurY = to->y;
@@ -157,15 +161,15 @@ int Outline_CubicTo(const FT_Vector* control1,
 
   param->m_pPath->AppendPoint(CFX_PointF(control1->x / param->m_CoordUnit,
                                          control1->y / param->m_CoordUnit),
-                              FXPT_TYPE::BezierTo, false);
+                              FXPT_TYPE::BezierTo);
 
   param->m_pPath->AppendPoint(CFX_PointF(control2->x / param->m_CoordUnit,
                                          control2->y / param->m_CoordUnit),
-                              FXPT_TYPE::BezierTo, false);
+                              FXPT_TYPE::BezierTo);
 
   param->m_pPath->AppendPoint(
       CFX_PointF(to->x / param->m_CoordUnit, to->y / param->m_CoordUnit),
-      FXPT_TYPE::BezierTo, false);
+      FXPT_TYPE::BezierTo);
 
   param->m_CurX = to->x;
   param->m_CurY = to->y;
@@ -349,7 +353,7 @@ void CFX_Font::LoadSubst(const ByteString& face_name,
                          bool bVertical) {
   m_bEmbedded = false;
   m_bVertical = bVertical;
-  m_pSubstFont = pdfium::MakeUnique<CFX_SubstFont>();
+  m_pSubstFont = std::make_unique<CFX_SubstFont>();
   m_Face = CFX_GEModule::Get()->GetFontMgr()->FindSubstFont(
       face_name, bTrueType, flags, weight, italic_angle, CharsetCP,
       m_pSubstFont.get());
@@ -381,12 +385,12 @@ bool CFX_Font::LoadEmbedded(pdfium::span<const uint8_t> src_span,
                             bool bForceAsVertical) {
   if (bForceAsVertical)
     m_bVertical = true;
-  m_pFontDataAllocation =
-      std::vector<uint8_t>(src_span.begin(), src_span.end());
+  m_FontDataAllocation = std::vector<uint8_t, FxAllocAllocator<uint8_t>>(
+      src_span.begin(), src_span.end());
   m_Face = CFX_GEModule::Get()->GetFontMgr()->NewFixedFace(
-      nullptr, m_pFontDataAllocation, 0);
+      nullptr, m_FontDataAllocation, 0);
   m_bEmbedded = true;
-  m_FontData = m_pFontDataAllocation;
+  m_FontData = m_FontDataAllocation;
   return !!m_Face;
 }
 
@@ -500,6 +504,13 @@ bool CFX_Font::IsBold() const {
 bool CFX_Font::IsFixedWidth() const {
   return m_Face && FXFT_Is_Face_fixedwidth(m_Face->GetRec()) != 0;
 }
+
+#if defined _SKIA_SUPPORT_ || defined _SKIA_SUPPORT_PATHS_
+bool CFX_Font::IsSubstFontBold() const {
+  CFX_SubstFont* subst_font = GetSubstFont();
+  return subst_font && subst_font->GetOriginalWeight() >= FXFONT_FW_BOLD;
+}
+#endif
 
 ByteString CFX_Font::GetPsName() const {
   if (!m_Face)
@@ -682,7 +693,7 @@ CFX_PathData* CFX_Font::LoadGlyphPathImpl(uint32_t glyph_index,
   funcs.delta = 0;
 
   OUTLINE_PARAMS params;
-  auto pPath = pdfium::MakeUnique<CFX_PathData>();
+  auto pPath = std::make_unique<CFX_PathData>();
   params.m_pPath = pPath.get();
   params.m_CurX = params.m_CurY = 0;
   params.m_CoordUnit = 64 * 64.0;

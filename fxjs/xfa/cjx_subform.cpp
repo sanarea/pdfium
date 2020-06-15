@@ -28,7 +28,7 @@ CJX_Subform::CJX_Subform(CXFA_Node* node) : CJX_Container(node) {
   DefineMethods(MethodSpecs);
 }
 
-CJX_Subform::~CJX_Subform() {}
+CJX_Subform::~CJX_Subform() = default;
 
 bool CJX_Subform::DynamicTypeIs(TypeTag eType) const {
   return eType == static_type__ || ParentType__::DynamicTypeIs(eType);
@@ -115,7 +115,7 @@ void CJX_Subform::instanceManager(CFXJSE_Value* pValue,
       WideString wsInstMgrName =
           pNode->JSObject()->GetCData(XFA_Attribute::Name);
       if (wsInstMgrName.GetLength() >= 1 && wsInstMgrName[0] == '_' &&
-          wsInstMgrName.Right(wsInstMgrName.GetLength() - 1) == wsName) {
+          wsInstMgrName.Last(wsInstMgrName.GetLength() - 1) == wsName) {
         pInstanceMgr = pNode;
       }
       break;

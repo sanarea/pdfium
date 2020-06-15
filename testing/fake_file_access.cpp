@@ -7,10 +7,8 @@
 #include <algorithm>
 #include <set>
 #include <utility>
-#include <vector>
 
 #include "core/fxcrt/fx_system.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -32,7 +30,7 @@ class FileAccessWrapper final : public FPDF_FILEACCESS {
   }
 
  private:
-  fxcrt::UnownedPtr<FakeFileAccess> simulator_;
+  UnownedPtr<FakeFileAccess> simulator_;
 };
 
 class FileAvailImpl final : public FX_FILEAVAIL {
@@ -50,7 +48,7 @@ class FileAvailImpl final : public FX_FILEAVAIL {
   }
 
  private:
-  fxcrt::UnownedPtr<FakeFileAccess> simulator_;
+  UnownedPtr<FakeFileAccess> simulator_;
 };
 
 class DownloadHintsImpl final : public FX_DOWNLOADHINTS {
@@ -69,20 +67,20 @@ class DownloadHintsImpl final : public FX_DOWNLOADHINTS {
   }
 
  private:
-  fxcrt::UnownedPtr<FakeFileAccess> simulator_;
+  UnownedPtr<FakeFileAccess> simulator_;
 };
 
 }  // namespace
 
 FakeFileAccess::FakeFileAccess(FPDF_FILEACCESS* file_access)
     : file_access_(file_access),
-      file_access_wrapper_(pdfium::MakeUnique<FileAccessWrapper>(this)),
-      file_avail_(pdfium::MakeUnique<FileAvailImpl>(this)),
-      download_hints_(pdfium::MakeUnique<DownloadHintsImpl>(this)) {
+      file_access_wrapper_(std::make_unique<FileAccessWrapper>(this)),
+      file_avail_(std::make_unique<FileAvailImpl>(this)),
+      download_hints_(std::make_unique<DownloadHintsImpl>(this)) {
   ASSERT(file_access_);
 }
 
-FakeFileAccess::~FakeFileAccess() {}
+FakeFileAccess::~FakeFileAccess() = default;
 
 FPDF_BOOL FakeFileAccess::IsDataAvail(size_t offset, size_t size) const {
   return available_data_.Contains(RangeSet::Range(offset, offset + size));

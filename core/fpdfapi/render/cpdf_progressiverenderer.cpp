@@ -15,18 +15,12 @@
 #include "core/fpdfapi/render/cpdf_renderstatus.h"
 #include "core/fxcrt/pauseindicator_iface.h"
 #include "core/fxge/cfx_renderdevice.h"
-#include "third_party/base/ptr_util.h"
 
 CPDF_ProgressiveRenderer::CPDF_ProgressiveRenderer(
     CPDF_RenderContext* pContext,
     CFX_RenderDevice* pDevice,
     const CPDF_RenderOptions* pOptions)
-    : m_Status(Ready),
-      m_pContext(pContext),
-      m_pDevice(pDevice),
-      m_pOptions(pOptions),
-      m_LayerIndex(0),
-      m_pCurrentLayer(nullptr) {}
+    : m_pContext(pContext), m_pDevice(pDevice), m_pOptions(pOptions) {}
 
 CPDF_ProgressiveRenderer::~CPDF_ProgressiveRenderer() {
   if (m_pRenderStatus) {
@@ -36,25 +30,25 @@ CPDF_ProgressiveRenderer::~CPDF_ProgressiveRenderer() {
 }
 
 void CPDF_ProgressiveRenderer::Start(PauseIndicatorIface* pPause) {
-  if (!m_pContext || !m_pDevice || m_Status != Ready) {
-    m_Status = Failed;
+  if (!m_pContext || !m_pDevice || m_Status != kReady) {
+    m_Status = kFailed;
     return;
   }
-  m_Status = ToBeContinued;
+  m_Status = kToBeContinued;
   Continue(pPause);
 }
 
 void CPDF_ProgressiveRenderer::Continue(PauseIndicatorIface* pPause) {
-  while (m_Status == ToBeContinued) {
+  while (m_Status == kToBeContinued) {
     if (!m_pCurrentLayer) {
       if (m_LayerIndex >= m_pContext->CountLayers()) {
-        m_Status = Done;
+        m_Status = kDone;
         return;
       }
       m_pCurrentLayer = m_pContext->GetLayer(m_LayerIndex);
       m_LastObjectRendered = m_pCurrentLayer->m_pObjectHolder->end();
-      m_pRenderStatus = pdfium::MakeUnique<CPDF_RenderStatus>(m_pContext.Get(),
-                                                              m_pDevice.Get());
+      m_pRenderStatus = std::make_unique<CPDF_RenderStatus>(m_pContext.Get(),
+                                                            m_pDevice.Get());
       if (m_pOptions)
         m_pRenderStatus->SetOptions(*m_pOptions);
       m_pRenderStatus->SetTransparency(

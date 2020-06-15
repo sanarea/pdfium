@@ -11,11 +11,11 @@
 
 #include "build/build_config.h"
 #include "core/fxcrt/fx_codepage.h"
+#include "core/fxcrt/fx_memory_wrappers.h"
 #include "core/fxcrt/fx_safe_types.h"
 #include "core/fxcrt/fx_stream.h"
 #include "core/fxge/cfx_fontmapper.h"
 #include "core/fxge/fx_font.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 
 #define CHARSET_FLAG_ANSI (1 << 0)
@@ -53,7 +53,7 @@ struct FxFileCloser {
   }
 };
 
-ByteString FPDF_ReadStringFromFile(FILE* pFile, uint32_t size) {
+ByteString ReadStringFromFile(FILE* pFile, uint32_t size) {
   ByteString result;
   {
     // Span's lifetime must end before ReleaseBuffer() below.
@@ -65,11 +65,11 @@ ByteString FPDF_ReadStringFromFile(FILE* pFile, uint32_t size) {
   return result;
 }
 
-ByteString FPDF_LoadTableFromTT(FILE* pFile,
-                                const uint8_t* pTables,
-                                uint32_t nTables,
-                                uint32_t tag,
-                                uint32_t fileSize) {
+ByteString LoadTableFromTT(FILE* pFile,
+                           const uint8_t* pTables,
+                           uint32_t nTables,
+                           uint32_t tag,
+                           uint32_t fileSize) {
   for (uint32_t i = 0; i < nTables; i++) {
     const uint8_t* p = pTables + i * 16;
     if (GET_TT_LONG(p) == tag) {
@@ -79,7 +79,7 @@ ByteString FPDF_LoadTableFromTT(FILE* pFile,
           offset + size > fileSize || fseek(pFile, offset, SEEK_SET) < 0) {
         return ByteString();
       }
-      return FPDF_ReadStringFromFile(pFile, size);
+      return ReadStringFromFile(pFile, size);
     }
   }
   return ByteString();
@@ -108,8 +108,13 @@ uint32_t GetCharset(int charset) {
 int32_t GetSimilarValue(int weight,
                         bool bItalic,
                         int pitch_family,
-                        uint32_t style) {
+                        uint32_t style,
+                        bool bMatchName,
+                        size_t familyNameLength,
+                        size_t bsNameLength) {
   int32_t iSimilarValue = 0;
+  if (bMatchName && (familyNameLength == bsNameLength))
+    iSimilarValue += 4;
   if (FontStyleIsForceBold(style) == (weight > 400))
     iSimilarValue += 16;
   if (FontStyleIsItalic(style) == bItalic)
@@ -153,7 +158,7 @@ void CFX_FolderFontInfo::ScanPath(const ByteString& path) {
       if (filename == "." || filename == "..")
         continue;
     } else {
-      ByteString ext = filename.Right(4);
+      ByteString ext = filename.Last(4);
       ext.MakeLower();
       if (ext != ".ttf" && ext != ".ttc" && ext != ".otf")
         continue;
@@ -218,12 +223,12 @@ void CFX_FolderFontInfo::ReportFace(const ByteString& path,
     return;
 
   uint32_t nTables = GET_TT_SHORT(buffer + 4);
-  ByteString tables = FPDF_ReadStringFromFile(pFile, nTables * 16);
+  ByteString tables = ReadStringFromFile(pFile, nTables * 16);
   if (tables.IsEmpty())
     return;
 
-  ByteString names = FPDF_LoadTableFromTT(pFile, tables.raw_str(), nTables,
-                                          0x6e616d65, filesize);
+  ByteString names =
+      LoadTableFromTT(pFile, tables.raw_str(), nTables, 0x6e616d65, filesize);
   if (names.IsEmpty())
     return;
 
@@ -235,13 +240,13 @@ void CFX_FolderFontInfo::ReportFace(const ByteString& path,
   if (style != "Regular")
     facename += " " + style;
 
-  if (pdfium::ContainsKey(m_FontList, facename))
+  if (pdfium::Contains(m_FontList, facename))
     return;
 
-  auto pInfo = pdfium::MakeUnique<FontFaceInfo>(path, facename, tables, offset,
-                                                filesize);
-  ByteString os2 = FPDF_LoadTableFromTT(pFile, tables.raw_str(), nTables,
-                                        0x4f532f32, filesize);
+  auto pInfo =
+      std::make_unique<FontFaceInfo>(path, facename, tables, offset, filesize);
+  ByteString os2 =
+      LoadTableFromTT(pFile, tables.raw_str(), nTables, 0x4f532f32, filesize);
   if (os2.GetLength() >= 86) {
     const uint8_t* p = os2.raw_str() + 78;
     uint32_t codepages = GET_TT_LONG(p);
@@ -280,7 +285,7 @@ void CFX_FolderFontInfo::ReportFace(const ByteString& path,
 }
 
 void* CFX_FolderFontInfo::GetSubstFont(const ByteString& face) {
-  for (size_t iBaseFont = 0; iBaseFont < FX_ArraySize(Base14Substs);
+  for (size_t iBaseFont = 0; iBaseFont < pdfium::size(Base14Substs);
        iBaseFont++) {
     if (face == Base14Substs[iBaseFont].m_pName)
       return GetFont(Base14Substs[iBaseFont].m_pSubstName);
@@ -298,6 +303,7 @@ void* CFX_FolderFontInfo::FindFont(int weight,
   if (charset == FX_CHARSET_ANSI && FontFamilyIsFixedPitch(pitch_family))
     return GetFont("Courier New");
 
+  ByteStringView bsFamily(family);
   uint32_t charset_flag = GetCharset(charset);
   int32_t iBestSimilar = 0;
   for (const auto& it : m_FontList) {
@@ -306,11 +312,14 @@ void* CFX_FolderFontInfo::FindFont(int weight,
     if (!(pFont->m_Charsets & charset_flag) && charset != FX_CHARSET_Default)
       continue;
 
-    if (bMatchName && !bsName.Contains(family))
+    if (bMatchName && !bsName.Contains(bsFamily))
       continue;
 
+    size_t familyNameLength = strlen(family);
+    size_t bsNameLength = bsName.GetLength();
     int32_t iSimilarValue =
-        GetSimilarValue(weight, bItalic, pitch_family, pFont->m_Styles);
+        GetSimilarValue(weight, bItalic, pitch_family, pFont->m_Styles,
+                        bMatchName, familyNameLength, bsNameLength);
     if (iSimilarValue > iBestSimilar) {
       iBestSimilar = iSimilarValue;
       pFind = pFont;

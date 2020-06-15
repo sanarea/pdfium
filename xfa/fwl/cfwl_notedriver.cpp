@@ -11,7 +11,6 @@
 
 #include "build/build_config.h"
 #include "core/fxcrt/fx_extension.h"
-#include "third_party/base/ptr_util.h"
 #include "third_party/base/stl_util.h"
 #include "xfa/fwl/cfwl_app.h"
 #include "xfa/fwl/cfwl_eventtarget.h"
@@ -40,11 +39,11 @@ void CFWL_NoteDriver::RegisterEventTarget(CFWL_Widget* pListener,
   if (key == 0) {
     do {
       key = rand();
-    } while (key == 0 || pdfium::ContainsKey(m_eventTargets, key));
+    } while (key == 0 || pdfium::Contains(m_eventTargets, key));
     pListener->SetEventKey(key);
   }
   if (!m_eventTargets[key])
-    m_eventTargets[key] = pdfium::MakeUnique<CFWL_EventTarget>(pListener);
+    m_eventTargets[key] = std::make_unique<CFWL_EventTarget>(pListener);
 
   m_eventTargets[key]->SetEventSource(pEventSource);
 }
@@ -224,11 +223,11 @@ bool CFWL_NoteDriver::DoWheel(CFWL_Message* pMessage,
                               CFWL_Widget* pMessageForm) {
   CFWL_WidgetMgr* pWidgetMgr = pMessageForm->GetOwnerApp()->GetWidgetMgr();
   CFWL_MessageMouseWheel* pMsg = static_cast<CFWL_MessageMouseWheel*>(pMessage);
-  CFWL_Widget* pDst = pWidgetMgr->GetWidgetAtPoint(pMessageForm, pMsg->m_pos);
+  CFWL_Widget* pDst = pWidgetMgr->GetWidgetAtPoint(pMessageForm, pMsg->pos());
   if (!pDst)
     return false;
 
-  pMsg->m_pos = pMessageForm->TransformTo(pDst, pMsg->m_pos);
+  pMsg->set_pos(pMessageForm->TransformTo(pDst, pMsg->pos()));
   pMsg->SetDstTarget(pDst);
   return true;
 }

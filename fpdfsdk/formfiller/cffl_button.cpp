@@ -14,7 +14,7 @@ CFFL_Button::CFFL_Button(CPDFSDK_FormFillEnvironment* pFormFillEnv,
       m_bMouseIn(false),
       m_bMouseDown(false) {}
 
-CFFL_Button::~CFFL_Button() {}
+CFFL_Button::~CFFL_Button() = default;
 
 void CFFL_Button::OnMouseEnter(CPDFSDK_PageView* pPageView) {
   m_bMouseIn = true;
@@ -49,7 +49,6 @@ bool CFFL_Button::OnLButtonUp(CPDFSDK_PageView* pPageView,
     return false;
 
   m_bMouseDown = false;
-  m_pWidget->GetPDFPage();
   InvalidateRect(GetViewBBox(pPageView));
   return true;
 }

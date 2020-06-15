@@ -6,7 +6,6 @@
 
 #include "fxjs/cjs_global.h"
 
-#include <map>
 #include <memory>
 #include <utility>
 #include <vector>
@@ -19,7 +18,6 @@
 #include "fxjs/cjs_object.h"
 #include "fxjs/js_define.h"
 #include "fxjs/js_resources.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -29,11 +27,9 @@ WideString PropFromV8Prop(v8::Isolate* pIsolate,
   return WideString::FromUTF8(ByteStringView(*utf8_value, utf8_value.length()));
 }
 
-template <class Alt>
-void JSSpecialPropQuery(const char*,
-                        v8::Local<v8::String> property,
+void JSSpecialPropQuery(v8::Local<v8::String> property,
                         const v8::PropertyCallbackInfo<v8::Integer>& info) {
-  auto pObj = JSGetObject<Alt>(info.Holder());
+  auto pObj = JSGetObject<CJS_Global>(info.Holder());
   if (!pObj)
     return;
 
@@ -47,11 +43,9 @@ void JSSpecialPropQuery(const char*,
   info.GetReturnValue().Set(!result.HasError() ? 4 : 0);
 }
 
-template <class Alt>
-void JSSpecialPropGet(const char* class_name,
-                      v8::Local<v8::String> property,
+void JSSpecialPropGet(v8::Local<v8::String> property,
                       const v8::PropertyCallbackInfo<v8::Value>& info) {
-  auto pObj = JSGetObject<Alt>(info.Holder());
+  auto pObj = JSGetObject<CJS_Global>(info.Holder());
   if (!pObj)
     return;
 
@@ -64,19 +58,17 @@ void JSSpecialPropGet(const char* class_name,
 
   if (result.HasError()) {
     pRuntime->Error(
-        JSFormatErrorString(class_name, "GetProperty", result.Error()));
+        JSFormatErrorString("global", "GetProperty", result.Error()));
     return;
   }
   if (result.HasReturn())
     info.GetReturnValue().Set(result.Return());
 }
 
-template <class Alt>
-void JSSpecialPropPut(const char* class_name,
-                      v8::Local<v8::String> property,
+void JSSpecialPropPut(v8::Local<v8::String> property,
                       v8::Local<v8::Value> value,
                       const v8::PropertyCallbackInfo<v8::Value>& info) {
-  auto pObj = JSGetObject<Alt>(info.Holder());
+  auto pObj = JSGetObject<CJS_Global>(info.Holder());
   if (!pObj)
     return;
 
@@ -89,15 +81,13 @@ void JSSpecialPropPut(const char* class_name,
 
   if (result.HasError()) {
     pRuntime->Error(
-        JSFormatErrorString(class_name, "PutProperty", result.Error()));
+        JSFormatErrorString("global", "PutProperty", result.Error()));
   }
 }
 
-template <class Alt>
-void JSSpecialPropDel(const char* class_name,
-                      v8::Local<v8::String> property,
+void JSSpecialPropDel(v8::Local<v8::String> property,
                       const v8::PropertyCallbackInfo<v8::Boolean>& info) {
-  auto pObj = JSGetObject<Alt>(info.Holder());
+  auto pObj = JSGetObject<CJS_Global>(info.Holder());
   if (!pObj)
     return;
 
@@ -107,14 +97,15 @@ void JSSpecialPropDel(const char* class_name,
 
   CJS_Result result = pObj->DelProperty(
       pRuntime, PropFromV8Prop(info.GetIsolate(), property).c_str());
+
   if (result.HasError()) {
     // TODO(dsinclair): Should this set the pRuntime->Error result?
-    // ByteString cbName =
-    //     ByteString::Format("%s.%s", class_name, "DelProperty");
+    // pRuntime->Error(
+    //     JSFormatErrorString("global", "DelProperty", result.Error());
   }
 }
 
-template <class T>
+template <typename T>
 v8::Local<v8::String> GetV8StringFromProperty(v8::Local<v8::Name> property,
                                               const T& info) {
   return property->ToString(info.GetIsolate()->GetCurrentContext())
@@ -144,8 +135,7 @@ void CJS_Global::queryprop_static(
     v8::Local<v8::Name> property,
     const v8::PropertyCallbackInfo<v8::Integer>& info) {
   ASSERT(property->IsString());
-  JSSpecialPropQuery<CJS_Global>(
-      "global",
+  JSSpecialPropQuery(
       v8::Local<v8::String>::New(info.GetIsolate(),
                                  GetV8StringFromProperty(property, info)),
       info);
@@ -156,8 +146,7 @@ void CJS_Global::getprop_static(
     v8::Local<v8::Name> property,
     const v8::PropertyCallbackInfo<v8::Value>& info) {
   ASSERT(property->IsString());
-  JSSpecialPropGet<CJS_Global>(
-      "global",
+  JSSpecialPropGet(
       v8::Local<v8::String>::New(info.GetIsolate(),
                                  GetV8StringFromProperty(property, info)),
       info);
@@ -169,8 +158,7 @@ void CJS_Global::putprop_static(
     v8::Local<v8::Value> value,
     const v8::PropertyCallbackInfo<v8::Value>& info) {
   ASSERT(property->IsString());
-  JSSpecialPropPut<CJS_Global>(
-      "global",
+  JSSpecialPropPut(
       v8::Local<v8::String>::New(info.GetIsolate(),
                                  GetV8StringFromProperty(property, info)),
       value, info);
@@ -181,8 +169,7 @@ void CJS_Global::delprop_static(
     v8::Local<v8::Name> property,
     const v8::PropertyCallbackInfo<v8::Boolean>& info) {
   ASSERT(property->IsString());
-  JSSpecialPropDel<CJS_Global>(
-      "global",
+  JSSpecialPropDel(
       v8::Local<v8::String>::New(info.GetIsolate(),
                                  GetV8StringFromProperty(property, info)),
       info);
@@ -249,17 +236,17 @@ CJS_Result CJS_Global::GetProperty(CJS_Runtime* pRuntime,
     return CJS_Result::Success();
 
   switch (pData->nType) {
-    case CFX_Value::DataType::NUMBER:
+    case CFX_Value::DataType::kNumber:
       return CJS_Result::Success(pRuntime->NewNumber(pData->dData));
-    case CFX_Value::DataType::BOOLEAN:
+    case CFX_Value::DataType::kBoolean:
       return CJS_Result::Success(pRuntime->NewBoolean(pData->bData));
-    case CFX_Value::DataType::STRING:
+    case CFX_Value::DataType::kString:
       return CJS_Result::Success(pRuntime->NewString(
           WideString::FromDefANSI(pData->sData.AsStringView()).AsStringView()));
-    case CFX_Value::DataType::OBJECT:
+    case CFX_Value::DataType::kObject:
       return CJS_Result::Success(
           v8::Local<v8::Object>::New(pRuntime->GetIsolate(), pData->pData));
-    case CFX_Value::DataType::NULLOBJ:
+    case CFX_Value::DataType::kNull:
       return CJS_Result::Success(pRuntime->NewNull());
     default:
       break;
@@ -272,26 +259,26 @@ CJS_Result CJS_Global::SetProperty(CJS_Runtime* pRuntime,
                                    v8::Local<v8::Value> vp) {
   ByteString sPropName = WideString(propname).ToDefANSI();
   if (vp->IsNumber()) {
-    return SetGlobalVariables(sPropName, CFX_Value::DataType::NUMBER,
+    return SetGlobalVariables(sPropName, CFX_Value::DataType::kNumber,
                               pRuntime->ToDouble(vp), false, ByteString(),
                               v8::Local<v8::Object>(), false);
   }
   if (vp->IsBoolean()) {
-    return SetGlobalVariables(sPropName, CFX_Value::DataType::BOOLEAN, 0,
+    return SetGlobalVariables(sPropName, CFX_Value::DataType::kBoolean, 0,
                               pRuntime->ToBoolean(vp), ByteString(),
                               v8::Local<v8::Object>(), false);
   }
   if (vp->IsString()) {
-    return SetGlobalVariables(sPropName, CFX_Value::DataType::STRING, 0, false,
+    return SetGlobalVariables(sPropName, CFX_Value::DataType::kString, 0, false,
                               pRuntime->ToWideString(vp).ToDefANSI(),
                               v8::Local<v8::Object>(), false);
   }
   if (vp->IsObject()) {
-    return SetGlobalVariables(sPropName, CFX_Value::DataType::OBJECT, 0, false,
+    return SetGlobalVariables(sPropName, CFX_Value::DataType::kObject, 0, false,
                               ByteString(), pRuntime->ToObject(vp), false);
   }
   if (vp->IsNull()) {
-    return SetGlobalVariables(sPropName, CFX_Value::DataType::NULLOBJ, 0, false,
+    return SetGlobalVariables(sPropName, CFX_Value::DataType::kNull, 0, false,
                               ByteString(), v8::Local<v8::Object>(), false);
   }
   if (vp->IsUndefined()) {
@@ -323,24 +310,24 @@ void CJS_Global::UpdateGlobalPersistentVariables() {
   for (int i = 0, sz = m_pGlobalData->GetSize(); i < sz; i++) {
     CFX_GlobalData::Element* pData = m_pGlobalData->GetAt(i);
     switch (pData->data.nType) {
-      case CFX_Value::DataType::NUMBER:
-        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::NUMBER,
+      case CFX_Value::DataType::kNumber:
+        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::kNumber,
                            pData->data.dData, false, ByteString(),
                            v8::Local<v8::Object>(), pData->bPersistent == 1);
         pRuntime->PutObjectProperty(ToV8Object(),
                                     pData->data.sKey.AsStringView(),
                                     pRuntime->NewNumber(pData->data.dData));
         break;
-      case CFX_Value::DataType::BOOLEAN:
-        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::BOOLEAN, 0,
+      case CFX_Value::DataType::kBoolean:
+        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::kBoolean, 0,
                            pData->data.bData == 1, ByteString(),
                            v8::Local<v8::Object>(), pData->bPersistent == 1);
         pRuntime->PutObjectProperty(
             ToV8Object(), pData->data.sKey.AsStringView(),
             pRuntime->NewBoolean(pData->data.bData == 1));
         break;
-      case CFX_Value::DataType::STRING:
-        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::STRING, 0,
+      case CFX_Value::DataType::kString:
+        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::kString, 0,
                            false, pData->data.sData, v8::Local<v8::Object>(),
                            pData->bPersistent == 1);
         pRuntime->PutObjectProperty(
@@ -349,19 +336,19 @@ void CJS_Global::UpdateGlobalPersistentVariables() {
                 WideString::FromUTF8(pData->data.sData.AsStringView())
                     .AsStringView()));
         break;
-      case CFX_Value::DataType::OBJECT: {
+      case CFX_Value::DataType::kObject: {
         v8::Local<v8::Object> pObj = pRuntime->NewObject();
         if (!pObj.IsEmpty()) {
           PutObjectProperty(pObj, &pData->data);
-          SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::OBJECT, 0,
+          SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::kObject, 0,
                              false, ByteString(), pObj,
                              pData->bPersistent == 1);
           pRuntime->PutObjectProperty(ToV8Object(),
                                       pData->data.sKey.AsStringView(), pObj);
         }
       } break;
-      case CFX_Value::DataType::NULLOBJ:
-        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::NULLOBJ, 0,
+      case CFX_Value::DataType::kNull:
+        SetGlobalVariables(pData->data.sKey, CFX_Value::DataType::kNull, 0,
                            false, ByteString(), v8::Local<v8::Object>(),
                            pData->bPersistent == 1);
         pRuntime->PutObjectProperty(
@@ -380,27 +367,27 @@ void CJS_Global::CommitGlobalPersisitentVariables(CJS_Runtime* pRuntime) {
       continue;
     }
     switch (pData->nType) {
-      case CFX_Value::DataType::NUMBER:
+      case CFX_Value::DataType::kNumber:
         m_pGlobalData->SetGlobalVariableNumber(name, pData->dData);
         m_pGlobalData->SetGlobalVariablePersistent(name, pData->bPersistent);
         break;
-      case CFX_Value::DataType::BOOLEAN:
+      case CFX_Value::DataType::kBoolean:
         m_pGlobalData->SetGlobalVariableBoolean(name, pData->bData);
         m_pGlobalData->SetGlobalVariablePersistent(name, pData->bPersistent);
         break;
-      case CFX_Value::DataType::STRING:
+      case CFX_Value::DataType::kString:
         m_pGlobalData->SetGlobalVariableString(name, pData->sData);
         m_pGlobalData->SetGlobalVariablePersistent(name, pData->bPersistent);
         break;
-      case CFX_Value::DataType::OBJECT: {
-        CFX_GlobalArray array;
+      case CFX_Value::DataType::kObject: {
+        std::vector<std::unique_ptr<CFX_KeyValue>> array;
         v8::Local<v8::Object> obj =
             v8::Local<v8::Object>::New(GetIsolate(), pData->pData);
         ObjectToArray(pRuntime, obj, &array);
         m_pGlobalData->SetGlobalVariableObject(name, std::move(array));
         m_pGlobalData->SetGlobalVariablePersistent(name, pData->bPersistent);
       } break;
-      case CFX_Value::DataType::NULLOBJ:
+      case CFX_Value::DataType::kNull:
         m_pGlobalData->SetGlobalVariableNull(name);
         m_pGlobalData->SetGlobalVariablePersistent(name, pData->bPersistent);
         break;
@@ -408,52 +395,53 @@ void CJS_Global::CommitGlobalPersisitentVariables(CJS_Runtime* pRuntime) {
   }
 }
 
-void CJS_Global::ObjectToArray(CJS_Runtime* pRuntime,
-                               v8::Local<v8::Object> pObj,
-                               CFX_GlobalArray* pArray) {
+void CJS_Global::ObjectToArray(
+    CJS_Runtime* pRuntime,
+    v8::Local<v8::Object> pObj,
+    std::vector<std::unique_ptr<CFX_KeyValue>>* pArray) {
   std::vector<WideString> pKeyList = pRuntime->GetObjectPropertyNames(pObj);
   for (const auto& ws : pKeyList) {
     ByteString sKey = ws.ToUTF8();
     v8::Local<v8::Value> v =
         pRuntime->GetObjectProperty(pObj, sKey.AsStringView());
     if (v->IsNumber()) {
-      auto pObjElement = pdfium::MakeUnique<CFX_KeyValue>();
-      pObjElement->nType = CFX_Value::DataType::NUMBER;
+      auto pObjElement = std::make_unique<CFX_KeyValue>();
+      pObjElement->nType = CFX_Value::DataType::kNumber;
       pObjElement->sKey = sKey;
       pObjElement->dData = pRuntime->ToDouble(v);
-      pArray->Add(std::move(pObjElement));
+      pArray->push_back(std::move(pObjElement));
       continue;
     }
     if (v->IsBoolean()) {
-      auto pObjElement = pdfium::MakeUnique<CFX_KeyValue>();
-      pObjElement->nType = CFX_Value::DataType::BOOLEAN;
+      auto pObjElement = std::make_unique<CFX_KeyValue>();
+      pObjElement->nType = CFX_Value::DataType::kBoolean;
       pObjElement->sKey = sKey;
       pObjElement->dData = pRuntime->ToBoolean(v);
-      pArray->Add(std::move(pObjElement));
+      pArray->push_back(std::move(pObjElement));
       continue;
     }
     if (v->IsString()) {
       ByteString sValue = pRuntime->ToWideString(v).ToDefANSI();
-      auto pObjElement = pdfium::MakeUnique<CFX_KeyValue>();
-      pObjElement->nType = CFX_Value::DataType::STRING;
+      auto pObjElement = std::make_unique<CFX_KeyValue>();
+      pObjElement->nType = CFX_Value::DataType::kString;
       pObjElement->sKey = sKey;
       pObjElement->sData = sValue;
-      pArray->Add(std::move(pObjElement));
+      pArray->push_back(std::move(pObjElement));
       continue;
     }
     if (v->IsObject()) {
-      auto pObjElement = pdfium::MakeUnique<CFX_KeyValue>();
-      pObjElement->nType = CFX_Value::DataType::OBJECT;
+      auto pObjElement = std::make_unique<CFX_KeyValue>();
+      pObjElement->nType = CFX_Value::DataType::kObject;
       pObjElement->sKey = sKey;
       ObjectToArray(pRuntime, pRuntime->ToObject(v), &pObjElement->objData);
-      pArray->Add(std::move(pObjElement));
+      pArray->push_back(std::move(pObjElement));
       continue;
     }
     if (v->IsNull()) {
-      auto pObjElement = pdfium::MakeUnique<CFX_KeyValue>();
-      pObjElement->nType = CFX_Value::DataType::NULLOBJ;
+      auto pObjElement = std::make_unique<CFX_KeyValue>();
+      pObjElement->nType = CFX_Value::DataType::kNull;
       pObjElement->sKey = sKey;
-      pArray->Add(std::move(pObjElement));
+      pArray->push_back(std::move(pObjElement));
     }
   }
 }
@@ -464,25 +452,25 @@ void CJS_Global::PutObjectProperty(v8::Local<v8::Object> pObj,
   if (pRuntime)
     return;
 
-  for (int i = 0, sz = pData->objData.Count(); i < sz; i++) {
-    CFX_KeyValue* pObjData = pData->objData.GetAt(i);
+  for (size_t i = 0; i < pData->objData.size(); ++i) {
+    CFX_KeyValue* pObjData = pData->objData.at(i).get();
     switch (pObjData->nType) {
-      case CFX_Value::DataType::NUMBER:
+      case CFX_Value::DataType::kNumber:
         pRuntime->PutObjectProperty(pObj, pObjData->sKey.AsStringView(),
                                     pRuntime->NewNumber(pObjData->dData));
         break;
-      case CFX_Value::DataType::BOOLEAN:
+      case CFX_Value::DataType::kBoolean:
         pRuntime->PutObjectProperty(pObj, pObjData->sKey.AsStringView(),
                                     pRuntime->NewBoolean(pObjData->bData == 1));
         break;
-      case CFX_Value::DataType::STRING:
+      case CFX_Value::DataType::kString:
         pRuntime->PutObjectProperty(
             pObj, pObjData->sKey.AsStringView(),
             pRuntime->NewString(
                 WideString::FromUTF8(pObjData->sData.AsStringView())
                     .AsStringView()));
         break;
-      case CFX_Value::DataType::OBJECT: {
+      case CFX_Value::DataType::kObject: {
         v8::Local<v8::Object> pNewObj = pRuntime->NewObject();
         if (!pNewObj.IsEmpty()) {
           PutObjectProperty(pNewObj, pObjData);
@@ -490,7 +478,7 @@ void CJS_Global::PutObjectProperty(v8::Local<v8::Object> pObj,
                                       pNewObj);
         }
       } break;
-      case CFX_Value::DataType::NULLOBJ:
+      case CFX_Value::DataType::kNull:
         pRuntime->PutObjectProperty(pObj, pObjData->sKey.AsStringView(),
                                     pRuntime->NewNull());
         break;
@@ -523,19 +511,19 @@ CJS_Result CJS_Global::SetGlobalVariables(const ByteString& propname,
     }
     pTemp->bDeleted = false;
     switch (nType) {
-      case CFX_Value::DataType::NUMBER:
+      case CFX_Value::DataType::kNumber:
         pTemp->dData = dData;
         break;
-      case CFX_Value::DataType::BOOLEAN:
+      case CFX_Value::DataType::kBoolean:
         pTemp->bData = bData;
         break;
-      case CFX_Value::DataType::STRING:
+      case CFX_Value::DataType::kString:
         pTemp->sData = sData;
         break;
-      case CFX_Value::DataType::OBJECT:
+      case CFX_Value::DataType::kObject:
         pTemp->pData.Reset(pData->GetIsolate(), pData);
         break;
-      case CFX_Value::DataType::NULLOBJ:
+      case CFX_Value::DataType::kNull:
         break;
       default:
         return CJS_Result::Failure(JSMessage::kObjectTypeError);
@@ -543,30 +531,30 @@ CJS_Result CJS_Global::SetGlobalVariables(const ByteString& propname,
     return CJS_Result::Success();
   }
 
-  auto pNewData = pdfium::MakeUnique<JSGlobalData>();
+  auto pNewData = std::make_unique<JSGlobalData>();
   switch (nType) {
-    case CFX_Value::DataType::NUMBER:
-      pNewData->nType = CFX_Value::DataType::NUMBER;
+    case CFX_Value::DataType::kNumber:
+      pNewData->nType = CFX_Value::DataType::kNumber;
       pNewData->dData = dData;
       pNewData->bPersistent = bDefaultPersistent;
       break;
-    case CFX_Value::DataType::BOOLEAN:
-      pNewData->nType = CFX_Value::DataType::BOOLEAN;
+    case CFX_Value::DataType::kBoolean:
+      pNewData->nType = CFX_Value::DataType::kBoolean;
       pNewData->bData = bData;
       pNewData->bPersistent = bDefaultPersistent;
       break;
-    case CFX_Value::DataType::STRING:
-      pNewData->nType = CFX_Value::DataType::STRING;
+    case CFX_Value::DataType::kString:
+      pNewData->nType = CFX_Value::DataType::kString;
       pNewData->sData = sData;
       pNewData->bPersistent = bDefaultPersistent;
       break;
-    case CFX_Value::DataType::OBJECT:
-      pNewData->nType = CFX_Value::DataType::OBJECT;
+    case CFX_Value::DataType::kObject:
+      pNewData->nType = CFX_Value::DataType::kObject;
       pNewData->pData.Reset(pData->GetIsolate(), pData);
       pNewData->bPersistent = bDefaultPersistent;
       break;
-    case CFX_Value::DataType::NULLOBJ:
-      pNewData->nType = CFX_Value::DataType::NULLOBJ;
+    case CFX_Value::DataType::kNull:
+      pNewData->nType = CFX_Value::DataType::kNull;
       pNewData->bPersistent = bDefaultPersistent;
       break;
     default:

@@ -13,7 +13,6 @@
 #include "core/fpdfapi/parser/cpdf_reference.h"
 #include "core/fpdfdoc/cpdf_numbertree.h"
 #include "core/fpdfdoc/cpdf_structelement.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -32,7 +31,7 @@ std::unique_ptr<CPDF_StructTree> CPDF_StructTree::LoadPage(
   if (!IsTagged(pDoc))
     return nullptr;
 
-  auto pTree = pdfium::MakeUnique<CPDF_StructTree>(pDoc);
+  auto pTree = std::make_unique<CPDF_StructTree>(pDoc);
   pTree->LoadPageTree(pPageDict);
   return pTree;
 }
@@ -105,9 +104,12 @@ RetainPtr<CPDF_StructElement> CPDF_StructTree::AddPageNode(
 
   RetainPtr<CPDF_StructElement> pParentElement =
       AddPageNode(pParent, map, nLevel + 1);
+  if (!pParentElement)
+    return pElement;
+
   bool bSave = false;
   for (CPDF_StructKid& kid : *pParentElement->GetKids()) {
-    if (kid.m_Type == CPDF_StructKid::Element && kid.m_pDict == pDict) {
+    if (kid.m_Type == CPDF_StructKid::kElement && kid.m_pDict == pDict) {
       kid.m_pElement = pElement;
       bSave = true;
     }

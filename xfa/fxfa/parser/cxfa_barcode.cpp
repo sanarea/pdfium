@@ -6,8 +6,9 @@
 
 #include "xfa/fxfa/parser/cxfa_barcode.h"
 
+#include <memory>
+
 #include "fxjs/xfa/cjx_node.h"
-#include "third_party/base/ptr_util.h"
 #include "xfa/fxfa/parser/cxfa_measurement.h"
 
 namespace {
@@ -50,7 +51,7 @@ CXFA_Barcode::CXFA_Barcode(CXFA_Document* doc, XFA_PacketType packet)
                 XFA_Element::Barcode,
                 {},
                 kBarcodeAttributeData,
-                pdfium::MakeUnique<CJX_Node>(this)) {}
+                std::make_unique<CJX_Node>(this)) {}
 
 CXFA_Barcode::~CXFA_Barcode() = default;
 
@@ -162,12 +163,12 @@ Optional<int8_t> CXFA_Barcode::GetWideNarrowRatio() {
     return {static_cast<int8_t>(FXSYS_wtoi(wsWideNarrowRatio->c_str()))};
 
   int32_t fB = FXSYS_wtoi(
-      wsWideNarrowRatio->Right(wsWideNarrowRatio->GetLength() - (*ptPos + 1))
+      wsWideNarrowRatio->Last(wsWideNarrowRatio->GetLength() - (*ptPos + 1))
           .c_str());
   if (!fB)
     return {0};
 
-  int32_t fA = FXSYS_wtoi(wsWideNarrowRatio->Left(*ptPos).c_str());
+  int32_t fA = FXSYS_wtoi(wsWideNarrowRatio->First(*ptPos).c_str());
   float result = static_cast<float>(fA) / static_cast<float>(fB);
   return {static_cast<int8_t>(result)};
 }

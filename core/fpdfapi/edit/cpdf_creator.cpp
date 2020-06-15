@@ -21,8 +21,9 @@
 #include "core/fpdfapi/parser/cpdf_syntax_parser.h"
 #include "core/fpdfapi/parser/fpdf_parser_utility.h"
 #include "core/fxcrt/fx_extension.h"
+#include "core/fxcrt/fx_memory_wrappers.h"
 #include "core/fxcrt/fx_random.h"
-#include "third_party/base/ptr_util.h"
+#include "core/fxcrt/fx_safe_types.h"
 #include "third_party/base/stl_util.h"
 
 namespace {
@@ -47,7 +48,7 @@ class CFX_FileBufferArchive final : public IFX_ArchiveStream {
 
   FX_FILESIZE offset_;
   size_t current_length_;
-  std::vector<uint8_t> buffer_;
+  std::vector<uint8_t, FxAllocAllocator<uint8_t>> buffer_;
   RetainPtr<IFX_RetainableWriteStream> backing_file_;
 };
 
@@ -92,7 +93,7 @@ bool CFX_FileBufferArchive::WriteBlock(const void* pBuf, size_t size) {
     buffer += buf_size;
   }
 
-  pdfium::base::CheckedNumeric<FX_FILESIZE> safe_offset = offset_;
+  FX_SAFE_FILESIZE safe_offset = offset_;
   safe_offset += size;
   if (!safe_offset.IsValid())
     return false;
@@ -145,9 +146,9 @@ CPDF_Creator::CPDF_Creator(CPDF_Document* pDoc,
       m_pEncryptDict(m_pParser ? m_pParser->GetEncryptDict() : nullptr),
       m_pSecurityHandler(m_pParser ? m_pParser->GetSecurityHandler() : nullptr),
       m_dwLastObjNum(m_pDocument->GetLastObjNum()),
-      m_Archive(pdfium::MakeUnique<CFX_FileBufferArchive>(archive)) {}
+      m_Archive(std::make_unique<CFX_FileBufferArchive>(archive)) {}
 
-CPDF_Creator::~CPDF_Creator() {}
+CPDF_Creator::~CPDF_Creator() = default;
 
 bool CPDF_Creator::WriteIndirectObj(uint32_t objnum, const CPDF_Object* pObj) {
   if (!m_Archive->WriteDWord(objnum) || !m_Archive->WriteString(" 0 obj\r\n"))
@@ -155,7 +156,7 @@ bool CPDF_Creator::WriteIndirectObj(uint32_t objnum, const CPDF_Object* pObj) {
 
   std::unique_ptr<CPDF_Encryptor> encryptor;
   if (GetCryptoHandler() && pObj != m_pEncryptDict)
-    encryptor = pdfium::MakeUnique<CPDF_Encryptor>(GetCryptoHandler(), objnum);
+    encryptor = std::make_unique<CPDF_Encryptor>(GetCryptoHandler(), objnum);
 
   if (!pObj->WriteTo(m_Archive.get(), encryptor.get()))
     return false;
@@ -259,7 +260,7 @@ CPDF_Creator::Stage CPDF_Creator::WriteDoc_Stage1() {
   if (m_iStage == Stage::kWriteIncremental15) {
     if (m_IsOriginal && m_SavedOffset > 0) {
       static constexpr FX_FILESIZE kBufferSize = 4096;
-      std::vector<uint8_t> buffer(kBufferSize);
+      std::vector<uint8_t, FxAllocAllocator<uint8_t>> buffer(kBufferSize);
       FX_FILESIZE src_size = m_SavedOffset;
       m_pParser->GetSyntax()->SetPos(0);
       while (src_size) {
@@ -340,7 +341,7 @@ CPDF_Creator::Stage CPDF_Creator::WriteDoc_Stage3() {
     if (!m_IsIncremental || !m_pParser->IsXRefStream()) {
       if (!m_IsIncremental || m_pParser->GetLastXRefOffset() == 0) {
         ByteString str;
-        str = pdfium::ContainsKey(m_ObjectOffsets, 1)
+        str = pdfium::Contains(m_ObjectOffsets, 1)
                   ? "xref\r\n"
                   : "xref\r\n0 1\r\n0000000000 65535 f\r\n";
         if (!m_Archive->WriteString(str.AsStringView()))
@@ -364,14 +365,14 @@ CPDF_Creator::Stage CPDF_Creator::WriteDoc_Stage3() {
     uint32_t i = m_CurObjNum;
     uint32_t j;
     while (i <= dwLastObjNum) {
-      while (i <= dwLastObjNum && !pdfium::ContainsKey(m_ObjectOffsets, i))
+      while (i <= dwLastObjNum && !pdfium::Contains(m_ObjectOffsets, i))
         i++;
 
       if (i > dwLastObjNum)
         break;
 
       j = i;
-      while (j <= dwLastObjNum && pdfium::ContainsKey(m_ObjectOffsets, j))
+      while (j <= dwLastObjNum && pdfium::Contains(m_ObjectOffsets, j))
         j++;
 
       if (i == 1)
@@ -520,7 +521,7 @@ CPDF_Creator::Stage CPDF_Creator::WriteDoc_Stage4() {
     if (m_IsIncremental && m_pParser && m_pParser->GetLastXRefOffset() == 0) {
       uint32_t i = 0;
       for (i = 0; i < m_dwLastObjNum; i++) {
-        if (!pdfium::ContainsKey(m_ObjectOffsets, i))
+        if (!pdfium::Contains(m_ObjectOffsets, i))
           continue;
         if (!m_Archive->WriteDWord(i) || !m_Archive->WriteString(" 1 "))
           return Stage::kInvalid;
@@ -595,34 +596,36 @@ void CPDF_Creator::InitID() {
   const CPDF_Array* pOldIDArray = m_pParser ? m_pParser->GetIDArray() : nullptr;
   const CPDF_Object* pID1 = pOldIDArray ? pOldIDArray->GetObjectAt(0) : nullptr;
   if (pID1) {
-    m_pIDArray->Add(pID1->Clone());
+    m_pIDArray->Append(pID1->Clone());
   } else {
     ByteString bsBuffer =
         GenerateFileID((uint32_t)(uintptr_t)this, m_dwLastObjNum);
-    m_pIDArray->AddNew<CPDF_String>(bsBuffer, true);
+    m_pIDArray->AppendNew<CPDF_String>(bsBuffer, true);
   }
 
   if (pOldIDArray) {
     const CPDF_Object* pID2 = pOldIDArray->GetObjectAt(1);
     if (m_IsIncremental && m_pEncryptDict && pID2) {
-      m_pIDArray->Add(pID2->Clone());
+      m_pIDArray->Append(pID2->Clone());
       return;
     }
     ByteString bsBuffer =
         GenerateFileID((uint32_t)(uintptr_t)this, m_dwLastObjNum);
-    m_pIDArray->AddNew<CPDF_String>(bsBuffer, true);
+    m_pIDArray->AppendNew<CPDF_String>(bsBuffer, true);
     return;
   }
 
-  m_pIDArray->Add(m_pIDArray->GetObjectAt(0)->Clone());
+  m_pIDArray->Append(m_pIDArray->GetObjectAt(0)->Clone());
   if (m_pEncryptDict) {
     ASSERT(m_pParser);
-    if (m_pEncryptDict->GetStringFor("Filter") == "Standard") {
+    int revision = m_pEncryptDict->GetIntegerFor("R");
+    if ((revision == 2 || revision == 3) &&
+        m_pEncryptDict->GetStringFor("Filter") == "Standard") {
       m_pNewEncryptDict = ToDictionary(m_pEncryptDict->Clone());
       m_pEncryptDict = m_pNewEncryptDict;
       m_pSecurityHandler = pdfium::MakeRetain<CPDF_SecurityHandler>();
       m_pSecurityHandler->OnCreate(m_pNewEncryptDict.Get(), m_pIDArray.Get(),
-                                   m_pParser->GetPassword());
+                                   m_pParser->GetEncodedPassword());
       m_bSecurityChanged = true;
     }
   }

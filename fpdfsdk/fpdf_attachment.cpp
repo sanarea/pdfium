@@ -4,6 +4,8 @@
 
 #include "public/fpdf_attachment.h"
 
+#include <limits.h>
+
 #include <memory>
 #include <utility>
 
@@ -22,8 +24,8 @@
 #include "core/fpdfdoc/cpdf_nametree.h"
 #include "core/fxcrt/cfx_datetime.h"
 #include "core/fxcrt/fx_extension.h"
+#include "core/fxcrt/fx_memory_wrappers.h"
 #include "fpdfsdk/cpdfsdk_helpers.h"
-#include "third_party/base/ptr_util.h"
 
 namespace {
 
@@ -38,7 +40,7 @@ ByteString CFXByteStringHexDecode(const ByteString& bsHex) {
 
 ByteString GenerateMD5Base16(const void* contents, const unsigned long len) {
   uint8_t digest[16];
-  CRYPT_MD5Generate(reinterpret_cast<const uint8_t*>(contents), len, digest);
+  CRYPT_MD5Generate({static_cast<const uint8_t*>(contents), len}, digest);
   char buf[32];
   for (int i = 0; i < 16; ++i)
     FXSYS_IntToTwoHexChars(digest[i], &buf[i * 2]);
@@ -54,7 +56,8 @@ FPDFDoc_GetAttachmentCount(FPDF_DOCUMENT document) {
   if (!pDoc)
     return 0;
 
-  return CPDF_NameTree(pDoc, "EmbeddedFiles").GetCount();
+  auto name_tree = CPDF_NameTree::Create(pDoc, "EmbeddedFiles");
+  return name_tree ? name_tree->GetCount() : 0;
 }
 
 FPDF_EXPORT FPDF_ATTACHMENT FPDF_CALLCONV
@@ -63,28 +66,14 @@ FPDFDoc_AddAttachment(FPDF_DOCUMENT document, FPDF_WIDESTRING name) {
   if (!pDoc)
     return nullptr;
 
-  CPDF_Dictionary* pRoot = pDoc->GetRoot();
-  if (!pRoot)
-    return nullptr;
-
   WideString wsName = WideStringFromFPDFWideString(name);
   if (wsName.IsEmpty())
     return nullptr;
 
-  // Retrieve the document's Names dictionary; create it if missing.
-  CPDF_Dictionary* pNames = pRoot->GetDictFor("Names");
-  if (!pNames) {
-    pNames = pDoc->NewIndirect<CPDF_Dictionary>();
-    pRoot->SetNewFor<CPDF_Reference>("Names", pDoc, pNames->GetObjNum());
-  }
-
-  // Create the EmbeddedFiles dictionary if missing.
-  if (!pNames->GetDictFor("EmbeddedFiles")) {
-    CPDF_Dictionary* pFiles = pDoc->NewIndirect<CPDF_Dictionary>();
-    pFiles->SetNewFor<CPDF_Array>("Names");
-    pNames->SetNewFor<CPDF_Reference>("EmbeddedFiles", pDoc,
-                                      pFiles->GetObjNum());
-  }
+  auto name_tree =
+      CPDF_NameTree::CreateWithRootNameArray(pDoc, "EmbeddedFiles");
+  if (!name_tree)
+    return nullptr;
 
   // Set up the basic entries in the filespec dictionary.
   CPDF_Dictionary* pFile = pDoc->NewIndirect<CPDF_Dictionary>();
@@ -93,10 +82,8 @@ FPDFDoc_AddAttachment(FPDF_DOCUMENT document, FPDF_WIDESTRING name) {
   pFile->SetNewFor<CPDF_String>(pdfium::stream::kF, wsName);
 
   // Add the new attachment name and filespec into the document's EmbeddedFiles.
-  CPDF_NameTree nameTree(pDoc, "EmbeddedFiles");
-  if (!nameTree.AddValueAndName(pFile->MakeReference(pDoc), wsName)) {
+  if (!name_tree->AddValueAndName(pFile->MakeReference(pDoc), wsName))
     return nullptr;
-  }
 
   return FPDFAttachmentFromCPDFObject(pFile);
 }
@@ -107,13 +94,13 @@ FPDFDoc_GetAttachment(FPDF_DOCUMENT document, int index) {
   if (!pDoc || index < 0)
     return nullptr;
 
-  CPDF_NameTree nameTree(pDoc, "EmbeddedFiles");
-  if (static_cast<size_t>(index) >= nameTree.GetCount())
+  auto name_tree = CPDF_NameTree::Create(pDoc, "EmbeddedFiles");
+  if (!name_tree || static_cast<size_t>(index) >= name_tree->GetCount())
     return nullptr;
 
   WideString csName;
   return FPDFAttachmentFromCPDFObject(
-      nameTree.LookupValueAndName(index, &csName));
+      name_tree->LookupValueAndName(index, &csName));
 }
 
 FPDF_EXPORT FPDF_BOOL FPDF_CALLCONV
@@ -122,11 +109,11 @@ FPDFDoc_DeleteAttachment(FPDF_DOCUMENT document, int index) {
   if (!pDoc || index < 0)
     return false;
 
-  CPDF_NameTree nameTree(pDoc, "EmbeddedFiles");
-  if (static_cast<size_t>(index) >= nameTree.GetCount())
+  auto name_tree = CPDF_NameTree::Create(pDoc, "EmbeddedFiles");
+  if (!name_tree || static_cast<size_t>(index) >= name_tree->GetCount())
     return false;
 
-  return nameTree.DeleteValueAndName(index);
+  return name_tree->DeleteValueAndName(index);
 }
 
 FPDF_EXPORT unsigned long FPDF_CALLCONV
@@ -214,7 +201,7 @@ FPDF_EXPORT FPDF_BOOL FPDF_CALLCONV
 FPDFAttachment_SetFile(FPDF_ATTACHMENT attachment,
                        FPDF_DOCUMENT document,
                        const void* contents,
-                       const unsigned long len) {
+                       unsigned long len) {
   CPDF_Object* pFile = CPDFObjectFromFPDFAttachment(attachment);
   CPDF_Document* pDoc = CPDFDocumentFromFPDFDocument(document);
   if (!pFile || !pFile->IsDictionary() || !pDoc || len > INT_MAX)
@@ -250,7 +237,7 @@ FPDFAttachment_SetFile(FPDF_ATTACHMENT attachment,
       true);
 
   // Create the file stream and have the filespec dictionary link to it.
-  std::unique_ptr<uint8_t, FxFreeDeleter> stream(FX_Alloc(uint8_t, len));
+  std::unique_ptr<uint8_t, FxFreeDeleter> stream(FX_AllocUninit(uint8_t, len));
   memcpy(stream.get(), contents, len);
   CPDF_Stream* pFileStream = pDoc->NewIndirect<CPDF_Stream>(
       std::move(stream), len, std::move(pFileStreamDict));
@@ -260,17 +247,23 @@ FPDFAttachment_SetFile(FPDF_ATTACHMENT attachment,
   return true;
 }
 
-FPDF_EXPORT unsigned long FPDF_CALLCONV
+FPDF_EXPORT FPDF_BOOL FPDF_CALLCONV
 FPDFAttachment_GetFile(FPDF_ATTACHMENT attachment,
                        void* buffer,
-                       unsigned long buflen) {
+                       unsigned long buflen,
+                       unsigned long* out_buflen) {
+  if (!out_buflen)
+    return false;
+
   CPDF_Object* pFile = CPDFObjectFromFPDFAttachment(attachment);
   if (!pFile)
-    return 0;
+    return false;
 
   CPDF_Stream* pFileStream = CPDF_FileSpec(pFile).GetFileStream();
   if (!pFileStream)
-    return 0;
+    return false;
 
-  return DecodeStreamMaybeCopyAndReturnLength(pFileStream, buffer, buflen);
+  *out_buflen =
+      DecodeStreamMaybeCopyAndReturnLength(pFileStream, buffer, buflen);
+  return true;
 }

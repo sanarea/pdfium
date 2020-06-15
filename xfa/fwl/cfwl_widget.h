@@ -59,6 +59,15 @@ class CFWL_Widget : public Observable, public IFWL_WidgetDelegate {
     virtual void GetBorderColorAndThickness(FX_ARGB* cr, float* fWidth) = 0;
   };
 
+  class ScopedUpdateLock {
+   public:
+    explicit ScopedUpdateLock(CFWL_Widget* widget);
+    ~ScopedUpdateLock();
+
+   private:
+    UnownedPtr<CFWL_Widget> const widget_;
+  };
+
   ~CFWL_Widget() override;
 
   virtual FWL_Type GetClassID() const = 0;
@@ -100,12 +109,6 @@ class CFWL_Widget : public Observable, public IFWL_WidgetDelegate {
   uint32_t GetStylesEx() const;
   uint32_t GetStates() const;
 
-  void LockUpdate() { m_iLock++; }
-  void UnlockUpdate() {
-    if (IsLocked())
-      m_iLock--;
-  }
-
   CFX_PointF TransformTo(CFWL_Widget* pWidget, const CFX_PointF& point);
   CFX_Matrix GetMatrix() const;
   IFWL_ThemeProvider* GetThemeProvider() const {
@@ -124,9 +127,8 @@ class CFWL_Widget : public Observable, public IFWL_WidgetDelegate {
   uint32_t GetEventKey() const { return m_nEventKey; }
   void SetEventKey(uint32_t key) { m_nEventKey = key; }
 
-  AdapterIface* GetFFWidget() const { return m_pFFWidget; }
-  void SetFFWidget(AdapterIface* pItem) { m_pFFWidget = pItem; }
-
+  AdapterIface* GetAdapterIface() const { return m_pAdapterIface; }
+  void SetAdapterIface(AdapterIface* pItem) { m_pAdapterIface = pItem; }
   void RepaintRect(const CFX_RectF& pRect);
 
  protected:
@@ -166,6 +168,12 @@ class CFWL_Widget : public Observable, public IFWL_WidgetDelegate {
   int32_t m_iLock = 0;
 
  private:
+  void LockUpdate() { m_iLock++; }
+  void UnlockUpdate() {
+    if (IsLocked())
+      m_iLock--;
+  }
+
   CFWL_Widget* GetParent() const { return m_pWidgetMgr->GetParentWidget(this); }
   CFX_SizeF GetOffsetFromParent(CFWL_Widget* pParent);
   void DrawBackground(CXFA_Graphics* pGraphics,
@@ -176,7 +184,7 @@ class CFWL_Widget : public Observable, public IFWL_WidgetDelegate {
   bool IsParent(CFWL_Widget* pParent);
 
   uint32_t m_nEventKey = 0;
-  AdapterIface* m_pFFWidget = nullptr;
+  AdapterIface* m_pAdapterIface = nullptr;
   UnownedPtr<IFWL_WidgetDelegate> m_pDelegate;
 };
 

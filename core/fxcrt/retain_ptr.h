@@ -31,6 +31,8 @@ class RetainPtr {
 
   RetainPtr() = default;
   RetainPtr(const RetainPtr& that) : RetainPtr(that.Get()) {}
+
+  // Move-construct a RetainPtr. After construction, |that| will be NULL.
   RetainPtr(RetainPtr&& that) noexcept { Swap(that); }
 
   // Deliberately implicit to allow returning nullptrs.
@@ -51,6 +53,7 @@ class RetainPtr {
     m_pObj.reset(obj);
   }
 
+  explicit operator T*() const { return Get(); }
   T* Get() const { return m_pObj.get(); }
   UnownedPtr<T> BackPointer() const { return UnownedPtr<T>(Get()); }
   void Swap(RetainPtr& that) { m_pObj.swap(that.m_pObj); }
@@ -65,13 +68,17 @@ class RetainPtr {
     return *this;
   }
 
+  // Move-assign a RetainPtr. After assignment, |that| will be NULL.
   RetainPtr& operator=(RetainPtr&& that) {
     m_pObj.reset(that.Leak());
     return *this;
   }
 
-  // Assigment from raw pointers is intentially not provided to make
-  // reference count churn more visible where possible.
+  // Use sparingly, may produce reference count churn.
+  RetainPtr& operator=(T* that) {
+    Reset(that);
+    return *this;
+  }
 
   bool operator==(const RetainPtr& that) const { return Get() == that.Get(); }
   bool operator!=(const RetainPtr& that) const { return !(*this == that); }
@@ -141,15 +148,15 @@ inline bool operator!=(const U* lhs, const RetainPtr<T>& rhs) {
 }  // namespace fxcrt
 
 using fxcrt::ReleaseDeleter;
-using fxcrt::RetainPtr;
 using fxcrt::Retainable;
+using fxcrt::RetainPtr;
 
 namespace pdfium {
 
-// Helper to make a RetainPtr along the lines of std::make_unique<>(),
-// or pdfium::MakeUnique<>(). Arguments are forwarded to T's constructor.
-// Classes managed by RetainPtr should have protected (or private)
-// constructors, and should friend this function.
+// Helper to make a RetainPtr along the lines of std::make_unique<>().
+// Arguments are forwarded to T's constructor. Classes managed by RetainPtr
+// should have protected (or private) constructors, and should friend this
+// function.
 template <typename T, typename... Args>
 RetainPtr<T> MakeRetain(Args&&... args) {
   return RetainPtr<T>(new T(std::forward<Args>(args)...));

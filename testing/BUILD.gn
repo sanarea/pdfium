@@ -27,9 +27,7 @@ source_set("test_support") {
     "utils/path_service.cpp",
     "utils/path_service.h",
   ]
-  data = [
-    "resources/",
-  ]
+  data = [ "resources/" ]
   deps = [
     "../:pdfium_public_headers",
     "../core/fdrm",
@@ -80,6 +78,8 @@ source_set("embedder_test_support") {
   sources = [
     "embedder_test.cpp",
     "embedder_test.h",
+    "embedder_test_constants.cpp",
+    "embedder_test_constants.h",
     "embedder_test_mock_delegate.h",
     "embedder_test_timer_handling_delegate.h",
     "fake_file_access.cpp",
@@ -87,7 +87,6 @@ source_set("embedder_test_support") {
     "range_set.cpp",
     "range_set.h",
   ]
-
   deps = [
     ":test_support",
     "../:pdfium_public_headers",
@@ -106,6 +105,7 @@ source_set("embedder_test_support") {
       "js_embedder_test.h",
     ]
     deps += [ "../fxjs" ]
+    configs += [ "//v8:external_startup_data" ]
 
     if (pdf_enable_xfa) {
       sources += [
